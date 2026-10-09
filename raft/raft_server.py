@@ -11,6 +11,7 @@ import traceback
 import datetime
 import json
 import threading
+import time
 from raft.vote_arguments import VoteArguments
 from raft.health_check_arguments import HealthCheckArguments
 from rpyc.utils.classic import obtain #To change the netref to dict
@@ -807,8 +808,11 @@ class Raft(IRaftActions):
         """Send AppendEntries RPC to a single peer (NO CALLBACK)"""
         conn = None
         try:
-            
+            time.sleep(6)
             with self.lock:
+                #check if the node is still the leader before sending the heartbeat
+                if self.raft_terms.state != RaftState.leader:
+                    return
                 # Prepare entries to send (from nextIndex[peer] onwards)
                 next_idx = self.next_index[peer_id]
                 prev_log_index = next_idx - 1
@@ -838,7 +842,7 @@ class Raft(IRaftActions):
                 peer_value["port"],
                 config={"allow_public_attrs": True, "instantiate_remote_objects": True}
             )
-    
+
             result = conn.root.exposed_send_health_check_request(health_check_args)
             
             # after getting `result`:
@@ -894,6 +898,13 @@ class Raft(IRaftActions):
                     self._try_advance_commit_index()
                 
                 else:
+                    if not entries:
+                        print(
+                            f"HEARTBEAT leader={self.raft_terms.id} "
+                            f"follower={peer_id} "
+                            f"time={time.monotonic():.9f}"
+                            f"Raft State = {self.raft_terms.state.name}"
+                        )
                     # Just a heartbeat, no new entries sent
                     # Don't update matchIndex/nextIndex
                     pass
