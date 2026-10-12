@@ -74,6 +74,10 @@ class Raft(IRaftActions):
         # ADDED: For leader election tracking
         self.vote_count = 0 #To calculate the peer count for leader election -> check it against the majority
         self.received_votes = {} # To track the peer id response for leader election
+        # Local instrumentation of elections won by this node, keyed by term.
+        self.election_winners = {}
+        # Protocol state: the leader accepted by this node for each term.
+        self.leaders_by_term = {}
     
     """Start the election timer thread"""
     def start_raft_node(self):
@@ -363,6 +367,7 @@ class Raft(IRaftActions):
                 last_log_index=self.raft_terms.last_log_index,
                 last_log_term=self.raft_terms.last_log_term
             )
+            election_term = vote_arguments.current_term
             
             # Get peers snapshot
             peers = dict(self.raft_terms.peers)
@@ -416,22 +421,36 @@ class Raft(IRaftActions):
             print(f"[Node {self.raft_terms.id}] Election result: {self.vote_count}/{total_servers} votes (need {majority})")
             
             # Step 7: Check if we won
-            if self.vote_count >= majority and self.raft_terms.state == RaftState.candidate:
-                print(f"[Node {self.raft_terms.id}] WON ELECTION for term {self.raft_terms.current_term}!")
-                
-                self.raft_terms.state = RaftState.leader
-                self._persist_state()
-                
-                # Initialize leader state
-                for peer_id in self.raft_terms.peers.keys():
-                    if peer_id != self.raft_terms.id:
-                        self.next_index[peer_id] = len(self.raft_terms.logs)
-                        self.match_index[peer_id] = -1
-                
-                # Initialize OWN matchIndex
-                self.match_index[self.raft_terms.id] = len(self.raft_terms.logs) - 1
-                
-                won_election = True  # ← Set flag
+            if (
+                self.vote_count >= majority
+                and self.raft_terms.state == RaftState.candidate
+                and self.raft_terms.current_term == election_term
+            ):
+                recorded_winner = self.election_winners.get(election_term)
+                if recorded_winner is not None and recorded_winner != self.raft_terms.id:
+                    print(
+                        f"[Node {self.raft_terms.id}] Election conflict in term "
+                        f"{election_term}: recorded winner {recorded_winner}, "
+                        f"candidate {self.raft_terms.id}"
+                    )
+                    won_election = False
+                else:
+                    self.election_winners[election_term] = self.raft_terms.id
+                    print(f"[Node {self.raft_terms.id}] WON ELECTION for term {election_term}!")
+
+                    self.raft_terms.state = RaftState.leader
+                    self._persist_state()
+
+                    # Initialize leader state
+                    for peer_id in self.raft_terms.peers.keys():
+                        if peer_id != self.raft_terms.id:
+                            self.next_index[peer_id] = len(self.raft_terms.logs)
+                            self.match_index[peer_id] = -1
+
+                    # Initialize OWN matchIndex
+                    self.match_index[self.raft_terms.id] = len(self.raft_terms.logs) - 1
+
+                    won_election = True  # ← Set flag
 
         # Broadcast that entries are now committed to the followers
         try:
@@ -660,20 +679,54 @@ class Raft(IRaftActions):
         
         with self.lock:
             
+            print({
+                "rpc": "AppendEntries",
+                "receiver_node": self.raft_terms.id,
+                "sender_node": health_check_arguments.leader_id,
+                "term": health_check_arguments.current_term,
+                "leader_id": health_check_arguments.leader_id,
+                "prev_log_index": health_check_arguments.prev_log_index,
+                "prev_log_term": health_check_arguments.prev_log_term,
+                "entries": health_check_arguments.entries,
+                "leader_commit": health_check_arguments.leader_commit,
+            })
             print(f"[Node {self.raft_terms.id}] Received AppendEntries from Node {health_check_arguments.leader_id} (term {health_check_arguments.current_term})")
             
             # Rule 1: Reject stale term
             if health_check_arguments.current_term < self.raft_terms.current_term:
                 return {"success": False, "term": self.raft_terms.current_term}
             
-            # Rule 2: Valid leader discovered -> reset timer and become follower
-            if health_check_arguments.current_term >= self.raft_terms.current_term:
+            incoming_term = health_check_arguments.current_term
+            incoming_leader = health_check_arguments.leader_id
+
+            # Rule 2: A higher term supersedes the local term.
+            if incoming_term > self.raft_terms.current_term:
                 self.raft_terms.current_term = health_check_arguments.current_term
                 self.raft_terms.state = RaftState.follower
+                self.raft_terms.voted_for = -1
                 self._persist_state()
-                self.reset_election_timer()
+
+            # Rule 3: Accept at most one leader for each term. This check and
+            # record update are protected by self.lock with the rest of the
+            # receiver state transition.
+            recorded_leader = self.leaders_by_term.get(incoming_term)
+            if recorded_leader is not None and recorded_leader != incoming_leader:
+                print(
+                    f"[Node {self.raft_terms.id}] Rejecting AppendEntries "
+                    f"leader conflict in term {incoming_term}: "
+                    f"recorded leader {recorded_leader}, "
+                    f"received leader {incoming_leader}"
+                )
+                return {"success": False, "term": self.raft_terms.current_term}
+
+            if recorded_leader is None:
+                self.leaders_by_term[incoming_term] = incoming_leader
+
+            # A recognized leader resets the election timer. This occurs only
+            # after the same-term conflict check succeeds.
+            self.reset_election_timer()
             
-            # Rule 3: Log consistency check
+            # Rule 4: Log consistency check
             # Check if we have an entry at prevLogIndex matching prevLogTerm
             if health_check_arguments.prev_log_index >= 0:
                 # prevLogIndex is -1 for first entry
@@ -692,7 +745,7 @@ class Raft(IRaftActions):
                     self._truncate_log_file(health_check_arguments.prev_log_index)
                     return {"success": False, "term": self.raft_terms.current_term}
             
-            # Rule 4: Append new entries (if any)
+            # Rule 5: Append new entries (if any)
             if health_check_arguments.entries:
                 # Delete any conflicting entries and append new ones
                 insert_index = health_check_arguments.prev_log_index + 1
@@ -739,7 +792,7 @@ class Raft(IRaftActions):
                 
                 print(f"[Node {self.raft_terms.id}] Follower appended {len(health_check_arguments.entries)} entries (now have {len(self.raft_terms.logs)} total)")
             
-            # Rule 5: Update commitIndex
+            # Rule 6: Update commitIndex
             if health_check_arguments.leader_commit > self.raft_terms.commit_index:
                 old_commit = self.raft_terms.commit_index
                 self.raft_terms.commit_index = min(
@@ -808,7 +861,6 @@ class Raft(IRaftActions):
         """Send AppendEntries RPC to a single peer (NO CALLBACK)"""
         conn = None
         try:
-            time.sleep(6)
             with self.lock:
                 #check if the node is still the leader before sending the heartbeat
                 if self.raft_terms.state != RaftState.leader:
@@ -836,6 +888,18 @@ class Raft(IRaftActions):
                     entries=entries,
                     leader_commit=self.raft_terms.commit_index
                 )
+
+                print({
+                    "rpc": "AppendEntries",
+                    "sender_node": self.raft_terms.id,
+                    "target_peer": peer_id,
+                    "term": health_check_args.current_term,
+                    "leader_id": health_check_args.leader_id,
+                    "prev_log_index": health_check_args.prev_log_index,
+                    "prev_log_term": health_check_args.prev_log_term,
+                    "entries": health_check_args.entries,
+                    "leader_commit": health_check_args.leader_commit,
+                })
             
             conn = rpyc.connect(
                 peer_value["host"],
@@ -898,13 +962,6 @@ class Raft(IRaftActions):
                     self._try_advance_commit_index()
                 
                 else:
-                    if not entries:
-                        print(
-                            f"HEARTBEAT leader={self.raft_terms.id} "
-                            f"follower={peer_id} "
-                            f"time={time.monotonic():.9f}"
-                            f"Raft State = {self.raft_terms.state.name}"
-                        )
                     # Just a heartbeat, no new entries sent
                     # Don't update matchIndex/nextIndex
                     pass
