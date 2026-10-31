@@ -3,7 +3,7 @@
 import json
 import threading
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List
 from fastapi import WebSocket
 
@@ -12,6 +12,7 @@ class WebSocketManager:
 
     def __init__(self):
         self.clients: set[WebSocket] = set()
+        self.client_checks = {}
         self.lock = threading.Lock()
         self.event_loop: asyncio.AbstractEventLoop | None = None
         self.raft_server = None  # Reference to RAFT server
@@ -61,78 +62,37 @@ class WebSocketManager:
         except Exception:
             return "unknown"
 
-    #ON CLIENT STARTUP WE BROADCAST ALL THE ENTRIES TO LOAD THE DATA TO THE MEMORY AND SYNC IT WITH UI
-    async def on_client_connect(self):
-        """
-        Called when a browser connects via WebSocket.
-        Syncs current RAFT state to the new client.
-        """
-        raft_nodes = self.get_registered_nodes()
-        
-        if not raft_nodes:
-            print("[WebSocketManager] Warning: No RAFT nodes registered")
-            return
-        
-        try:
-            print(f"[WebSocketManager] Syncing state for {len(raft_nodes)} nodes...")
-            
-            # Sync state from ALL nodes
-            for node_id, raft_server in raft_nodes.items():
-                try:
-                    with raft_server.lock:
-                        logs = raft_server.raft_terms.logs
-                        commit_index = raft_server.raft_terms.commit_index
-                    
-                    # Send log entries for this node
-                    for index, log_entry in enumerate(logs):
-                        is_committed = index <= commit_index
-                        await self.broadcast_log_entry(
-                            node_id=node_id,
-                            log_entry=log_entry.get("command", ""),
-                            log_index=index,
-                            committed=is_committed,
-                        )
-                
-                except Exception as e:
-                    print(f"[WebSocketManager] Error syncing node {node_id}: {e}")
-        
-            
-                try:
-                    if raft_server.state_machine_applier:
-                        state_machine_data = raft_server.state_machine_applier.get_state()
-                        state_machine_data = state_machine_data.get('data', None)
-                        
-                        if state_machine_data:
-                            print(f"[WebSocketManager] Sending KV store state to client...")
-                            for key, byte_data_record in state_machine_data.items():
-                                # Access fields from ByteDataRecord
-                                for field_name, field_obj in byte_data_record.fields.items():
-                                    await self.broadcast_kv_store_update(
-                                        node_id=node_id,
-                                        log_index=-1,
-                                        log_entry={"command": f"SET {key}.{field_name}={field_obj.value}"},
-                                        result={"key": key, "field": field_name, "value": field_obj.value},
-                                    )
-                except Exception as e:
-                    print(f"[WebSocketManager] Error syncing KV store: {e}")
-                    import traceback
-                    traceback.print_exc()
-            
-            print(f"[WebSocketManager] State sync complete for client")
-        
-        except Exception as e:
-            print(f"[WebSocketManager] Error during state sync: {e}")
-            import traceback
-            traceback.print_exc()
+    async def on_client_connect(self, websocket):
+        """Send metadata only, to the newly authenticated subscriber."""
+        for node_id, node in self.get_registered_nodes().items():
+            with node.lock:
+                state = node.raft_terms
+                snapshot = {
+                    "type": "node_state_change", "node_id": str(node_id),
+                    "new_state": state.state.name, "current_term": state.current_term,
+                    "last_log_index": state.last_log_index,
+                    "last_log_term": state.last_log_term,
+                    "commit_index": state.commit_index,
+                }
+                entries = [{"type": "log_entry", "node_id": str(node_id),
+                            "log_index": i, "committed": i <= state.commit_index}
+                           for i in range(len(state.logs))]
+            if not await self._send_to_client(websocket, json.dumps(snapshot)):
+                return
+            for entry in entries:
+                if not await self._send_to_client(websocket, json.dumps(entry)):
+                    return
 
-    async def add_client(self, websocket: WebSocket):
+    async def add_client(self, websocket: WebSocket, authorized=None):
         with self.lock:
             self.clients.add(websocket)
+            self.client_checks[websocket] = authorized
             print(f"[WebSocketManager] Client connected. Total clients: {len(self.clients)}")
 
     async def remove_client(self, websocket: WebSocket):
         with self.lock:
             self.clients.discard(websocket)
+            self.client_checks.pop(websocket, None)
             print(f"[WebSocketManager] Client disconnected. Total clients: {len(self.clients)}")
 
     async def broadcast_heartbeat(
@@ -155,7 +115,7 @@ class WebSocketManager:
             "last_log_index": int(last_log_index),
             "last_log_term": int(last_log_term),
             "followers": [str(f) for f in followers],
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "responses": self._make_serializable(peer_responses),
         }
         await self._broadcast_now(message)
@@ -173,7 +133,7 @@ class WebSocketManager:
             "peer_id": str(peer_id),
             "success": bool(success),
             "term": result['term'] if result['success'] else None,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         await self._broadcast_now(message)
 
@@ -183,7 +143,7 @@ class WebSocketManager:
             "node_id": str(node_id),
             "new_state": str(new_state),
             "current_term": int(current_term),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         await self._broadcast_now(message)
 
@@ -192,10 +152,9 @@ class WebSocketManager:
         message = {
             "type": "log_entry",
             "node_id": str(node_id),
-            "log_entry": self._make_serializable(log_entry),
             "log_index": int(log_index),
             "committed": bool(committed),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         await self._broadcast_now(message)
     
@@ -207,7 +166,7 @@ class WebSocketManager:
             "current_term": current_term,
             "last_log_index": last_log_index,
             "last_log_term": last_log_term,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         await self._broadcast_now(message)
     
@@ -220,7 +179,7 @@ class WebSocketManager:
             "current_term": current_term,
             "last_log_index": last_log_index,
             "last_log_term": last_log_term,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         await self._broadcast_now(message)
     
@@ -234,7 +193,7 @@ class WebSocketManager:
             "current_term": current_term,
             "last_log_index": last_log_index,
             "last_log_term": last_log_term,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         await self._broadcast_now(message)
     
@@ -250,7 +209,7 @@ class WebSocketManager:
             "node_id": str(node_id),
             "committed_until_index": int(committed_until_index),
             "current_term": int(current_term),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         await self._broadcast_now(message)
     
@@ -261,25 +220,28 @@ class WebSocketManager:
         log_entry: Dict,
         result: str | None = None,
     ):
-        """Broadcast when entry is applied to state machine."""
-        key = result.get('key', None)
-        field = result.get('field', None)
-        value = result.get('value', None)
-        
-        message = {
-            "type": "kv_store_update",
-            "node_id": str(node_id),
-            "log_index": int(log_index),
-            "log_entry": self._make_serializable(log_entry),
-            "key": key,
-            "field": field,
-            "value": value,
-            "timestamp": datetime.utcnow().isoformat(),
-        }
-        
-        await self._broadcast_now(message)
+        """Only expose application progress; never keys, fields, values or commands."""
+        await self._broadcast_now({
+            "type": "entry_applied", "node_id": str(node_id),
+            "log_index": int(log_index), "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
 
     async def _broadcast_now(self, message: Dict):
+        allowed = {
+            "heartbeat": {"leader_id", "current_term", "last_log_index", "last_log_term", "followers"},
+            "peer_response": {"leader_id", "peer_id", "success", "term"},
+            "node_state_change": {"node_id", "new_state", "current_term"},
+            "log_entry": {"node_id", "log_index", "committed"},
+            "vote_request": {"node_id", "current_term", "last_log_index", "last_log_term"},
+            "vote_response": {"node_id", "voted_for", "current_term", "last_log_index", "last_log_term"},
+            "election_result": {"node_id", "election_result", "voted_by", "current_term", "last_log_index", "last_log_term"},
+            "entries_committed": {"node_id", "committed_until_index", "current_term"},
+            "entry_applied": {"node_id", "log_index"},
+        }
+        fields = allowed.get(message.get("type"))
+        if fields is None:
+            return
+        message = {k: v for k, v in message.items() if k in fields | {"type", "timestamp"}}
         if not self.clients:
             return
 
@@ -296,13 +258,22 @@ class WebSocketManager:
 
         for client in clients_snapshot:
             try:
-                await client.send_text(message_json)
+                await self._send_to_client(client, message_json)
             except Exception as e:
                 print(f"[WebSocketManager] Error sending to client: {e}")
                 disconnected.append(client)
 
         for client in disconnected:
             await self.remove_client(client)
+
+    async def _send_to_client(self, client, message):
+        authorized = self.client_checks.get(client)
+        if authorized is not None and not authorized():
+            await client.close(code=1008)
+            await self.remove_client(client)
+            return False
+        await client.send_text(message)
+        return True
 
     def get_client_count(self) -> int:
         with self.lock:

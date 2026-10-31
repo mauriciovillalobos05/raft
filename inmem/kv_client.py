@@ -1,12 +1,15 @@
-import rpyc
+import json
+import os
+from security.auth import get_auth
+from security.wire import encode
 from typing import Optional, Dict, Any, List, Tuple
-from inmem.kv_command import create_set_command, create_delete_command, serialize_command
+from inmem.kv_command import create_set_command, create_delete_command
 
 
 class KVClient:
     """Client for the distributed KV store backed by RAFT consensus."""
     
-    def __init__(self, cluster_config: Dict[str, Dict[str, Any]]):
+    def __init__(self, cluster_config: Dict[str, Dict[str, Any]], identity=None):
         
         """
         Initialize client with cluster configuration.
@@ -20,6 +23,10 @@ class KVClient:
                 }
         """
         self.cluster_config = cluster_config
+        self.identity = identity or os.environ.get("RAFT_CLIENT_ID", "kv-gateway")
+        auth = get_auth()
+        if auth.identities[self.identity]["role"] != "client":
+            raise PermissionError("KVClient requires a client certificate")
         self._leader_id: Optional[str] = None
         self._connections: Dict[str, Any] = {}
     
@@ -42,10 +49,9 @@ class KVClient:
             if not node_info:
                 raise ValueError(f"Unknown node: {node_id}")
         
-            conn = rpyc.connect(
-                node_info['host'],
-                node_info['port'],
-                config={"allow_public_attrs": True, "sync_request_timeout": 5}
+            conn = get_auth().connect(
+                node_info['host'], node_info['port'],
+                identity=self.identity, expected_node=str(node_id),
             )
             
             self._connections[node_id] = conn
@@ -83,7 +89,7 @@ class KVClient:
                 conn = self._get_connection(node_id)
                 
                 # Query for leader info
-                result = conn.root.exposed_get_leader()
+                result = json.loads(conn.root.get_leader())
                 
                 # Check if this node knows the leader
                 if result["state"] == "leader":
@@ -108,7 +114,8 @@ class KVClient:
         """Send a write command to the leader with retry logic."""
         
         # Serialize the command that is sent through the network
-        serialized_command = serialize_command(command)
+        operation = command["type"]
+        payload = {k: v for k, v in command.items() if k != "type"}
         
         for attempt in range(max_retries):
             
@@ -128,7 +135,8 @@ class KVClient:
                 conn = self._get_connection(self._leader_id)
                 
                 # Send command to leader
-                result = conn.root.exposed_append_log_entries(serialized_command)
+                method = conn.root.set_kv if operation == "SET" else conn.root.delete_kv
+                result = json.loads(method(encode(payload)))
                 
                 # Success - return result
                 if result["success"]:
@@ -193,7 +201,7 @@ class KVClient:
         
         try:
             conn = self._get_connection(target_node)
-            result = conn.root.exposed_read_kv(key, field, timestamp)
+            result = json.loads(conn.root.read_kv(encode({"key": key, "field": field, "timestamp": timestamp})))
                                     
             return {
                 "success": result["success"], 
@@ -234,11 +242,11 @@ class KVClient:
         
         try:
             conn = self._get_connection(target)
-            result = conn.root.exposed_scan_kv(key, timestamp)
+            result = json.loads(conn.root.scan_kv(encode({"key": key, "timestamp": timestamp})))
             
             return {
                 "success": result["success"],
-                "fields": list(result["fields"])  # Convert list netref to local list
+                "fields": [tuple(field) for field in result["fields"]]  # Convert list netref to local list
             }
         
         except Exception as e:
@@ -263,11 +271,11 @@ class KVClient:
         
         try:
             conn = self._get_connection(target)
-            result = conn.root.exposed_scan_kv_by_prefix(key, prefix, timestamp)
+            result = json.loads(conn.root.scan_kv_by_prefix(encode({"key": key, "prefix": prefix, "timestamp": timestamp})))
             
             return {
                 "success": result["success"],
-                "fields": list(result["fields"])  # Convert list netref to local list
+                "fields": [tuple(field) for field in result["fields"]]  # Convert list netref to local list
             }
                     
         except Exception as e:

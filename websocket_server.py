@@ -1,299 +1,150 @@
-"""
-websocket_server.py - RAFT Consensus with KV Store Integration
-FastAPI WebSocket server with KV client endpoint for log replication
-"""
-
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
-from pydantic import BaseModel
-from fastapi.middleware.cors import CORSMiddleware
-import json
+"""HTTPS KV gateway and authenticated, metadata-only operator telemetry."""
+import asyncio
+from contextlib import asynccontextmanager
+from pathlib import Path
+import time
+from fastapi import Depends, FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, ConfigDict, Field
 import uvicorn
 from inmem.kv_client import KVClient
-import asyncio
 from raft.raft_websocket_manager import WebSocketManager
-import time
-
-app = FastAPI()
-
-# Enable CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Get singleton WebSocket manager
-ws_manager = WebSocketManager.get_ws_manager()
+from security.auth import get_auth
+from security.http import COOKIE, require, check_origin, create_session, session_principal, revoke_session
 
 CLUSTER_CONFIG = {
     "A": {"host": "127.0.0.1", "port": 5001},
     "B": {"host": "127.0.0.1", "port": 5002},
     "C": {"host": "127.0.0.1", "port": 5003},
 }
+ws_manager = WebSocketManager.get_ws_manager()
+
+
+@asynccontextmanager
+async def lifespan(app):
+    auth = get_auth()  # Fail startup when credentials are missing or invalid.
+    auth.web_tls()
+    auth.server_context(auth.gateway_identity)
+    ws_manager.set_event_loop(asyncio.get_running_loop())
+    yield
+
+
+app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+
+
+@app.middleware("http")
+async def secure_http(request: Request, call_next):
+    if request.url.scheme != "https":
+        return Response("HTTPS required", status_code=400)
+    response = await call_next(request)
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
 
 
 class KvItem(BaseModel):
-    type: str
-    command: str
-    key: str
-    field: str
-    value: str
+    model_config = ConfigDict(extra="forbid", strict=True)
+    key: str = Field(min_length=1, max_length=65536)
+    field: str = Field(min_length=1, max_length=65536)
+    value: str = Field(max_length=65536)
 
 
-@app.on_event("startup")
-async def startup_event():
-    """
-    Register the running event loop with WebSocketManager
-    Called when uvicorn starts the app
-    """
-    loop = asyncio.get_event_loop()
-    ws_manager.set_event_loop(loop)
-    print(f"FastAPI startup: WebSocketManager loop registered (id={id(loop)})")
+@app.post("/auth/login")
+def login(request: Request, response: Response, principal=Depends(require("ui", "operator"))):
+    origin = request.headers.get("origin")
+    if origin:
+        check_origin(origin)
+    response.set_cookie(COOKIE, create_session(principal), max_age=get_auth().session_ttl,
+                        secure=True, httponly=True, samesite="strict", path="/")
+    return {"role": principal.role, "expires_in": get_auth().session_ttl}
+
+
+@app.post("/auth/logout")
+def logout(request: Request, response: Response):
+    check_origin(request.headers.get("origin"))
+    token = request.cookies.get(COOKIE)
+    if session_principal(token) is None:
+        raise HTTPException(401, "Session required")
+    revoke_session(token)
+    response.delete_cookie(COOKIE, secure=True, httponly=True, samesite="strict", path="/")
+    return {"success": True}
 
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    token = websocket.cookies.get(COOKIE)
+    principal = session_principal(token)
+    if (websocket.url.scheme != "wss" or not principal or principal.role not in {"ui", "operator"}
+            or websocket.headers.get("origin") not in get_auth().origins):
+        await websocket.close(code=1008)
+        return
     await websocket.accept()
-    await ws_manager.add_client(websocket)
-    print(f"WebSocket client connected. Total clients: {ws_manager.get_client_count()}")
-    
-    #Sync state immediately when client connects
-    await ws_manager.on_client_connect()
-
+    await ws_manager.add_client(websocket, authorized=lambda: session_principal(token) is not None)
     try:
+        await ws_manager.on_client_connect(websocket)
         while True:
-            data = await websocket.receive_text()
+            if not session_principal(token):
+                await websocket.close(code=1008)
+                break
             try:
-                message = json.loads(data)
-                print(f"📨 Received from client: {message}")
-            except Exception as e:
-                print(f"Failed to parse message: {e}")
-    except WebSocketDisconnect:
+                # Telemetry sockets are receive-only from the browser's perspective.
+                await asyncio.wait_for(websocket.receive_text(), timeout=1)
+                await websocket.close(code=1008)
+                break
+            except asyncio.TimeoutError:
+                continue
+    except (WebSocketDisconnect, RuntimeError):
+        pass
+    finally:
         await ws_manager.remove_client(websocket)
-        print(f"WebSocket client disconnected. Total clients: {ws_manager.get_client_count()}")
-    except Exception as e:
-        print(f"WebSocket error: {e}")
-        try:
-            await ws_manager.remove_client(websocket)
-        except Exception:
-            pass
+
+
+def kv_call(operation, **kwargs):
+    client = KVClient(CLUSTER_CONFIG, identity=get_auth().gateway_identity)
+    try:
+        result = getattr(client, operation)(timestamp=int(time.time() * 1_000_000), **kwargs)
+        if not result.get("success") and result.get("error") in {"CONNECTION_ERROR", "NO_LEADER", "MAX_RETRIES"}:
+            raise HTTPException(503, "Cluster unavailable")
+        return result
+    finally:
+        client.close()
 
 
 @app.post("/kv-store")
-async def write_kv_store(kv_item: KvItem):
-    try:
-        print(f"\n{'='*60}")
-        print(f"KV Store Write Request")
+def write_kv_store(item: KvItem, principal=Depends(require("client"))):
+    return kv_call("set", **item.model_dump())
 
-        # Get current timestamp (microseconds)
-        timestamp = int(time.time() * 1_000_000)
-        print(f"Timestamp: {timestamp}")
-        
-        client = KVClient(CLUSTER_CONFIG)
-        
-        # Call set on the cluster (will be routed to leader)
-        # This initiates log replication across the cluster
-        result = client.set(
-            key=str(kv_item.key),
-            field=str(kv_item.field),
-            value=str(kv_item.value),
-            timestamp=timestamp,
-            ttl=None  # No TTL for now
-        )
-
-        print(f"KVClient.set() returned: {result}")
-        
-        return {
-            "success": True,
-            "message": "KV store entry submitted for replication",
-            "key": kv_item.key,
-            "field": kv_item.field,
-            "value": kv_item.value,
-            "timestamp": timestamp,
-            "log_index": result['index'] if result['success'] else None,
-            "term": result['term'] if result['success'] else None,
-        }
-
-    except ConnectionError as e:
-        print(f"Connection Error: {e}")
-        return {
-            "success": False,
-            "error": "CONNECTION_ERROR",
-            "message": f"Failed to connect to cluster: {str(e)}",
-            "details": "Make sure start_cluster.py has started the RAFT nodes"
-        }, 503
-
-    except TimeoutError as e:
-        print(f"Timeout Error: {e}")
-        return {
-            "success": False,
-            "error": "TIMEOUT_ERROR",
-            "message": f"Cluster operation timed out: {str(e)}",
-            "details": "Leader may be unavailable or nodes are slow to respond"
-        }, 504
-
-    except Exception as e:
-        print(f"Unexpected Error: {type(e).__name__}: {e}")
-        return {
-            "success": False,
-            "error": "INTERNAL_ERROR",
-            "message": f"Error writing to KV store: {str(e)}",
-            "exception_type": type(e).__name__
-        }, 500
 
 @app.get("/kv-store")
-async def kv_store(key: str, field: str):
-    try:
-        print(f"\n{'='*60}")
-        print(f"KV Store Get Request")
+def read_kv_store(key: str, field: str, principal=Depends(require("client"))):
+    return kv_call("get", key=key, field=field)
 
-        # Get current timestamp (microseconds)
-        timestamp = int(time.time() * 1_000_000)
-        print(f"Timestamp: {timestamp}")
-        
-        client = KVClient(CLUSTER_CONFIG)
-        
-        # Call set on the cluster (will be routed to leader)
-        # This initiates log replication across the cluster
-        result = client.get(
-            key=str(key),
-            field=str(field),
-            timestamp=timestamp,
-        )
-
-        print(f"KVClient.get() returned: {result}")
-        
-        return {
-            "success": True,
-            "message": "Data retrived successfully",
-            "value": result['value'] if result["success"] else "NOT FOUND"
-        }
-
-    except ConnectionError as e:
-        print(f"Connection Error: {e}")
-        return {
-            "success": False,
-            "error": "CONNECTION_ERROR",
-            "message": f"Failed to connect to cluster: {str(e)}",
-            "details": "Make sure start_cluster.py has started the RAFT nodes"
-        }, 503
-
-    except TimeoutError as e:
-        print(f"Timeout Error: {e}")
-        return {
-            "success": False,
-            "error": "TIMEOUT_ERROR",
-            "message": f"Cluster operation timed out: {str(e)}",
-            "details": "Leader may be unavailable or nodes are slow to respond"
-        }, 504
-
-    except Exception as e:
-        print(f"Unexpected Error: {type(e).__name__}: {e}")
-        return {
-            "success": False,
-            "error": "INTERNAL_ERROR",
-            "message": f"Error while reading to KV store: {str(e)}",
-            "exception_type": type(e).__name__
-        }, 500
 
 @app.delete("/kv-store")
-async def delete_kv_store(key: str, field: str):
-    try:
-        print(f"\n{'='*60}")
-        print(f"KV Store Get Request")
+def delete_kv_store(key: str, field: str, principal=Depends(require("client"))):
+    return kv_call("delete", key=key, field=field)
 
-        # Get current timestamp (microseconds)
-        timestamp = int(time.time() * 1_000_000)
-        print(f"Timestamp: {timestamp}")
-        
-        client = KVClient(CLUSTER_CONFIG)
-        
-        # Call set on the cluster (will be routed to leader)
-        # This initiates log replication across the cluster
-        result = client.delete(
-            key=str(key),
-            field=str(field),
-            timestamp=timestamp,
-        )
 
-        print(f"KVClient.delete() returned: {result}")
-        
-        return {
-            "success": True,
-            "key": str(key),
-            "field": str(field),
-            "result": "Entry appended to leader's log"
-        }
-
-    except ConnectionError as e:
-        print(f"Connection Error: {e}")
-        return {
-            "success": False,
-            "error": "CONNECTION_ERROR",
-            "message": f"Failed to connect to cluster: {str(e)}",
-            "details": "Make sure start_cluster.py has started the RAFT nodes"
-        }, 503
-
-    except TimeoutError as e:
-        print(f"Timeout Error: {e}")
-        return {
-            "success": False,
-            "error": "TIMEOUT_ERROR",
-            "message": f"Cluster operation timed out: {str(e)}",
-            "details": "Leader may be unavailable or nodes are slow to respond"
-        }, 504
-
-    except Exception as e:
-        print(f"Unexpected Error: {type(e).__name__}: {e}")
-        return {
-            "success": False,
-            "error": "INTERNAL_ERROR",
-            "message": f"Error while deleting KV field: {str(e)}",
-            "exception_type": type(e).__name__
-        }, 500
-        
 @app.get("/health")
-async def health():
-    """Health check endpoint"""
-    try:
-        # Try to connect to cluster to verify it's alive
-        client = KVClient(CLUSTER_CONFIG)
-        cluster_healthy = True
-    except Exception as e:
-        print(f"Cluster health check failed: {e}")
-        cluster_healthy = False
+def health(principal=Depends(require("ui", "operator"))):
+    return {"status": "ok", "websocket_clients": ws_manager.get_client_count()}
 
-    return {
-        "status": "ok",
-        "websocket": {
-            "connected_clients": ws_manager.get_client_count(),
-            "event_loop_registered": ws_manager.event_loop is not None
-        },
-        "cluster": {
-            "healthy": cluster_healthy,
-            "config": CLUSTER_CONFIG
-        }
-    }
 
 @app.get("/cluster/status")
-async def cluster_status():
-    """Get cluster status"""
-    return {
-        "nodes": CLUSTER_CONFIG,
-        "node_count": len(CLUSTER_CONFIG),
-        "description": "RAFT cluster with 3 nodes (A, B, C)"
-    }
+def cluster_status(principal=Depends(require("ui", "operator"))):
+    return {"node_ids": list(CLUSTER_CONFIG), "node_count": len(CLUSTER_CONFIG)}
 
 
 def get_ws_manager():
-    """Get the WebSocket manager instance"""
     return ws_manager
 
 
+# Same-origin assets contain no credentials or KV data. Build before starting.
+ui_dist = Path(__file__).parent / "client" / "raft-visualization" / "dist"
+if ui_dist.is_dir():
+    app.mount("/", StaticFiles(directory=ui_dist, html=True), name="ui")
+
+
 if __name__ == "__main__":
-    print("\n" + "="*60)
-    print(f"Cluster Config: {CLUSTER_CONFIG}")
-    print("="*60 + "\n")
-    uvicorn.run(app, host="0.0.0.0", port=8765)
+    uvicorn.run(app, host="0.0.0.0", port=8765, ws="websockets-sansio", proxy_headers=False, **get_auth().web_tls())

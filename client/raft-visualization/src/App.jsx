@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
+import { motion as Motion } from 'framer-motion';
 
 const nodeCoords = {
   A: { x: 80, y: 100 },
@@ -7,21 +7,13 @@ const nodeCoords = {
   C: { x: 180, y: 240 },
 };
 
-const RaftVisualizationWithWebSocket = () => {
-  const [inputKey, setInputKey] = useState('');
-  const [inputField, setInputField] = useState('');
-  const [inputValue, setInputValue] = useState('');
-
+const RaftVisualizationWithWebSocket = ({ onSessionEnd }) => {
   // Logs per node
   const [nodeLogEntries, setNodeLogEntries] = useState({
     A: [],
     B: [],
     C: [],
   });
-
-  // KV store
-  const [kvMetadata, setKvMetadata] = useState({});
-  const [committedKVStore, setCommittedKVStore] = useState({});
 
   // Base RAFT state
   const [activeMessage, setActiveMessage] = useState(null);
@@ -30,16 +22,10 @@ const RaftVisualizationWithWebSocket = () => {
   const [lastLogIndex, setLastLogIndex] = useState(null);
   const [lastLogTerm, setLastLogTerm] = useState(null);
   const [followers, setFollowers] = useState([]);
-  const [peerResponses, setPeerResponses] = useState({});
+  const [, setPeerResponses] = useState({});
   const [connectionStatus, setConnectionStatus] = useState('disconnected');
   const [lastHeartbeatTime, setLastHeartbeatTime] = useState(null);
-  const [debugMessages, setDebugMessages] = useState([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [operation, setOperation] = useState('SET');
-  const [getResult, setGetResult] = useState(null);
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-
-
+  const [, setDebugMessages] = useState([]);
   // NEW: Election state
   const [electionInProgress, setElectionInProgress] = useState(false);
   const [candidateNodes, setCandidateNodes] = useState([]); // ['A', 'B']
@@ -56,53 +42,31 @@ const RaftVisualizationWithWebSocket = () => {
     setDebugMessages((prev) => [...prev.slice(-4), msg]);
   };
 
-  // WebSocket setup
+  // The HTTPS login cookie authenticates this same-origin WebSocket.
   useEffect(() => {
-    const connectWebSocket = () => {
-      try {
-        addDebug('Attempting WebSocket connection to ws://localhost:8765/ws');
-        const wsUrl = 'ws://localhost:8765/ws';
-        wsRef.current = new WebSocket(wsUrl);
-
-        wsRef.current.onopen = () => {
-          addDebug('WebSocket CONNECTED');
-          setConnectionStatus('connected');
-        };
-
-        wsRef.current.onmessage = (event) => {
-          try {
-            const message = JSON.parse(event.data);
-            addDebug(`📨 Message received: ${message.type}`);
-            handleWebSocketMessage(message);
-          } catch (e) {
-            addDebug(`Parse error: ${e.message}`);
-          }
-        };
-
-        wsRef.current.onerror = (error) => {
-          addDebug(`WebSocket ERROR: ${error.message || error.toString()}`);
-          setConnectionStatus('error');
-        };
-
-        wsRef.current.onclose = () => {
-          addDebug('WebSocket DISCONNECTED - Reconnecting in 3s');
-          setConnectionStatus('disconnected');
-          setTimeout(connectWebSocket, 3000);
-        };
-      } catch (e) {
-        addDebug(`Connection failed: ${e.message}`);
-        setConnectionStatus('error');
-        setTimeout(connectWebSocket, 3000);
-      }
+    let stopped = false;
+    let timer;
+    const connect = () => {
+      const socket = new WebSocket(`wss://${window.location.host}/ws`);
+      wsRef.current = socket;
+      socket.onopen = () => setConnectionStatus('connected');
+      socket.onmessage = (event) => handleWebSocketMessage(JSON.parse(event.data));
+      socket.onerror = () => setConnectionStatus('error');
+      socket.onclose = (event) => {
+        setConnectionStatus('disconnected');
+        if (stopped) return;
+        if (event.code === 1008 || event.code === 1006) onSessionEnd();
+        else timer = setTimeout(connect, 3000);
+      };
     };
-
-    connectWebSocket();
-
+    connect();
     return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
+      stopped = true;
+      clearTimeout(timer);
+      wsRef.current?.close();
     };
+    // Message handlers use functional state updates.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleWebSocketMessage = (message) => {
@@ -123,8 +87,7 @@ const RaftVisualizationWithWebSocket = () => {
         case 'entries_committed':
           handleEntriesCommitted(message);
           break;
-        case 'kv_store_update':
-          handleKVStoreUpdate(message);
+        case 'entry_applied':
           break;
         // NEW: Election message handlers
         case 'vote_request':
@@ -174,8 +137,8 @@ const RaftVisualizationWithWebSocket = () => {
   };
 
   const handlePeerResponse = (message) => {
-    const { type, leader_id, peer_id, success, term, timestamp } = message;
-    if (!peer_id || !leader_id || !result) {
+    const { leader_id, peer_id, success, term, timestamp } = message;
+    if (!peer_id || !leader_id) {
       addDebug('peer_response missing fields');
       return;
     }
@@ -189,7 +152,7 @@ const RaftVisualizationWithWebSocket = () => {
       },
     }));
 
-    if (result.success) {
+    if (success) {
       setActiveMessage({
         type: 'peer_response',
         from: peer_id,
@@ -208,13 +171,13 @@ const RaftVisualizationWithWebSocket = () => {
   };
 
   const handleLogEntry = (message) => {
-    const { node_id, log_entry, log_index, committed } = message;
-    if (!node_id || !log_entry || log_index == null) {
+    const { node_id, log_index, committed } = message;
+    if (!node_id || log_index == null) {
       addDebug('log_entry missing fields');
       return;
     }
 
-    addDebug(`Log entry on Node ${node_id}: "${log_entry}"`);
+    addDebug(`Log index ${log_index} on Node ${node_id}`);
 
     setNodeLogEntries((prev) => ({
       ...prev,
@@ -222,7 +185,7 @@ const RaftVisualizationWithWebSocket = () => {
         ...prev[node_id],
         {
           id: log_index,
-          value: log_entry.command || String(log_entry),
+          value: `Index ${log_index}`,
           committed: !!committed,
         },
       ],
@@ -253,57 +216,8 @@ const RaftVisualizationWithWebSocket = () => {
     }
   };
 
-  const handleKVStoreUpdate = (message) => {
-    try {
-      const { node_id, log_index, key, field, value, timestamp } = message;
-
-      if (!node_id || log_index == null) {
-        addDebug(`KV update missing: node_id=${node_id}, log_index=${log_index}`);
-        return;
-      }
-
-      if (!key || !field || value === undefined || value === null) {
-        addDebug(`KV update invalid: key=${key}, field=${field}, value=${value}`);
-        return;
-      }
-
-      const updateId = `${node_id}-${log_index}-${key}-${field}`;
-
-      setKvMetadata((prev) => ({
-        ...prev,
-        [`${key}-${field}`]: {
-          node_id,
-          log_index,
-          timestamp: timestamp || new Date().toISOString(),
-          updated_at: new Date().toLocaleTimeString(),
-        },
-      }));
-
-      addDebug(`KV Store [Node ${node_id}]: ${key}.${field} = ${value}`);
-
-      setCommittedKVStore((prev) => {
-        const existing = prev[String(key)]?.[String(field)];
-
-        if (existing === String(value)) {
-          return prev;
-        }
-
-        return {
-          ...prev,
-          [String(key)]: {
-            ...(prev[String(key)] || {}),
-            [String(field)]: String(value),
-          },
-        };
-      });
-    } catch (e) {
-      addDebug(`KV store update error: ${e.message}`);
-    }
-  };
-
-  // NEW: Election handlers
   const handleVoteRequest = (message) => {
-    const { node_id, current_term, last_log_index, last_log_term } = message;
+    const { node_id, current_term } = message;
 
     addDebug(`Vote request from Node ${node_id} for term ${current_term}`);
 
@@ -358,7 +272,7 @@ const RaftVisualizationWithWebSocket = () => {
   };
 
   const handleElectionResult = (message) => {
-    const { node_id, election_result, current_term, voted_by } = message;
+    const { node_id, election_result, current_term } = message;
 
     if (!election_result) {
       addDebug(`Node ${node_id} did not win election in term ${current_term}`);
@@ -385,109 +299,10 @@ const RaftVisualizationWithWebSocket = () => {
     }, 2500);
   };
 
-  const handleOperationSubmit = async (op) => {
-    // Validation
-    if (!inputKey.trim() || !inputField.trim()) {
-      alert('Please enter key and field');
-      return;
-    }
-
-    if (op === 'SET' && !inputValue.trim()) {
-      alert('Please enter value for SET operation');
-      return;
-    }
-
-    setIsSubmitting(true);
-    setGetResult(null);
-
-    try {
-      if (op === 'SET') {
-        const payload = {
-          type: 'client_command',
-          command: `SET ${inputKey}.${inputField}=${inputValue}`,
-          key: inputKey,
-          field: inputField,
-          value: inputValue,
-        };
-
-        const response = await fetch(`http://localhost:8765/kv-store`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.message || `HTTP ${response.status}`);
-
-        console.log('SET successful:', data);
-        setInputKey('');
-        setInputField('');
-        setInputValue('');
-      }
-      else if (op === 'GET') {
-        const response = await fetch(
-          `http://localhost:8765/kv-store?key=${inputKey}&field=${inputField}`,
-          {
-            method: 'GET',
-            headers: { 'Content-Type': 'application/json' },
-          }
-        );
-
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.message || `HTTP ${response.status}`);
-
-        console.log('GET successful:', data);
-        setGetResult(data);
-      }
-      else if (op === 'DELETE') {
-        const response = await fetch(`http://localhost:8765/kv-store?key=${inputKey}&field=${inputField}`, {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-        });
-
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.message || `HTTP ${response.status}`);
-
-        console.log('DELETE successful:', data);
-
-        setCommittedKVStore((prev) => {
-          const updated = { ...prev };
-
-          if (updated[inputKey]) {
-            delete updated[inputKey][inputField];
-
-            // If key has no more fields, delete the entire key
-            if (Object.keys(updated[inputKey]).length === 0) {
-              delete updated[inputKey];
-            }
-          }
-
-          return updated;
-        });
-        setInputKey('');
-        setInputField('');
-      }
-    } catch (err) {
-      console.error(`${op} error:`, err);
-      alert(`${op} failed: ${err.message}`);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   const nodeColors = {
-    leader: {
-      gradient: 'linear-gradient(135deg, #f97316 0%, #ef4444 100%)',
-      shadow: 'rgba(249, 115, 22, 0.5)',
-    },
-    candidate: {
-      gradient: 'linear-gradient(135deg, #a855f7 0%, #f59e0b 100%)',
-      shadow: 'rgba(168, 85, 247, 0.7)',
-    },
-    follower: {
-      gradient: 'linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%)',
-      shadow: 'rgba(59, 130, 246, 0.5)',
-    },
+    leader: { gradient: 'linear-gradient(135deg, #f97316 0%, #ef4444 100%)', shadow: 'rgba(249, 115, 22, 0.5)' },
+    candidate: { gradient: 'linear-gradient(135deg, #a855f7 0%, #f59e0b 100%)', shadow: 'rgba(168, 85, 247, 0.7)' },
+    follower: { gradient: 'linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%)', shadow: 'rgba(59, 130, 246, 0.5)' },
   };
 
   // Get node state: CANDIDATE > LEADER > FOLLOWER
@@ -496,177 +311,6 @@ const RaftVisualizationWithWebSocket = () => {
     if (leaderId === nodeId) return 'LEADER';
     return 'FOLLOWER';
   };
-
-  const getKVStoreRows = () => {
-    const rows = [];
-    Object.entries(committedKVStore).forEach(([key, fieldsObj]) => {
-      if (fieldsObj && typeof fieldsObj === 'object') {
-        Object.entries(fieldsObj).forEach(([field, value]) => {
-          const metaKey = `${key}-${field}`;
-          rows.push({
-            key,
-            field,
-            value,
-            node_id: kvMetadata[metaKey]?.node_id || '-',
-            updated_at: kvMetadata[metaKey]?.updated_at || '-',
-          });
-        });
-      }
-    });
-    return rows;
-  };
-
-  const enhancedTableUI = (
-    <div
-      style={{
-        background: 'rgba(30, 41, 59, 0.8)',
-        border: '1px solid rgba(71, 85, 105, 0.4)',
-        borderRadius: '12px',
-        padding: '1.5rem',
-        backdropFilter: 'blur(10px)',
-        marginBottom: '2rem',
-      }}
-    >
-      <h2
-        style={{
-          fontSize: '1.2rem',
-          fontWeight: '700',
-          margin: '0 0 1rem 0',
-          color: '#10b981',
-        }}
-      >
-        Committed KV Store (State Machine)
-      </h2>
-      {getKVStoreRows().length === 0 ? (
-        <div
-          style={{
-            color: '#64748b',
-            fontSize: '12px',
-            fontStyle: 'italic',
-            padding: '1rem',
-          }}
-        >
-          No committed entries yet...
-        </div>
-      ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table
-            style={{
-              width: '100%',
-              borderCollapse: 'collapse',
-              fontSize: '12px',
-            }}
-          >
-            <thead>
-              <tr
-                style={{
-                  borderBottom: '2px solid rgba(16, 185, 129, 0.3)',
-                }}
-              >
-                <th
-                  style={{
-                    padding: '0.75rem',
-                    textAlign: 'left',
-                    color: '#10b981',
-                    fontWeight: '700',
-                    width: '20%',
-                  }}
-                >
-                  Key
-                </th>
-                <th
-                  style={{
-                    padding: '0.75rem',
-                    textAlign: 'left',
-                    color: '#10b981',
-                    fontWeight: '700',
-                    width: '20%',
-                  }}
-                >
-                  Field
-                </th>
-                <th
-                  style={{
-                    padding: '0.75rem',
-                    textAlign: 'left',
-                    color: '#10b981',
-                    fontWeight: '700',
-                    width: '30%',
-                  }}
-                >
-                  Value
-                </th>
-                <th
-                  style={{
-                    padding: '0.75rem',
-                    textAlign: 'left',
-                    color: '#10b981',
-                    fontWeight: '700',
-                    width: '15%',
-                  }}
-                >
-                  Updated
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {getKVStoreRows().map((row, idx) => (
-                <motion.tr
-                  key={`kv-${row.key}-${row.field}-${idx}`}
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5 }}
-                  style={{
-                    borderBottom: '1px solid rgba(71, 85, 105, 0.3)',
-                  }}
-                >
-                  <td
-                    style={{
-                      padding: '0.75rem',
-                      color: '#cbd5e1',
-                      fontFamily: 'monospace',
-                      wordBreak: 'break-word',
-                    }}
-                  >
-                    {String(row.key)}
-                  </td>
-                  <td
-                    style={{
-                      padding: '0.75rem',
-                      color: '#cbd5e1',
-                      fontFamily: 'monospace',
-                      wordBreak: 'break-word',
-                    }}
-                  >
-                    {String(row.field)}
-                  </td>
-                  <td
-                    style={{
-                      padding: '0.75rem',
-                      color: '#10b981',
-                      fontFamily: 'monospace',
-                      wordBreak: 'break-word',
-                    }}
-                  >
-                    {String(row.value)}
-                  </td>
-                  <td
-                    style={{
-                      padding: '0.75rem',
-                      color: '#94a3b8',
-                      fontSize: '11px',
-                    }}
-                  >
-                    {row.updated_at}
-                  </td>
-                </motion.tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
 
   return (
     <div
@@ -754,7 +398,7 @@ const RaftVisualizationWithWebSocket = () => {
 
       {/* NEW: Election Tracker Panel */}
       {electionInProgress && (
-        <motion.div
+        <Motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -20 }}
@@ -830,7 +474,7 @@ const RaftVisualizationWithWebSocket = () => {
                         overflow: 'hidden',
                       }}
                     >
-                      <motion.div
+                      <Motion.div
                         initial={{ width: 0 }}
                         animate={{ width: `${(votes.length / total_nodes) * 100}%` }}
                         transition={{ duration: 0.5 }}
@@ -861,223 +505,8 @@ const RaftVisualizationWithWebSocket = () => {
               );
             })}
           </div>
-        </motion.div>
+        </Motion.div>
       )}
-
-      {/* Input KV Store */}
-      <div
-        style={{
-          background: 'rgba(30, 41, 59, 0.8)',
-          border: '1px solid rgba(71, 85, 105, 0.4)',
-          borderRadius: '12px',
-          padding: '1.5rem',
-          marginBottom: '2rem',
-          backdropFilter: 'blur(10px)',
-        }}
-      >
-        <h2
-          style={{
-            fontSize: '1.2rem',
-            fontWeight: '700',
-            margin: '0 0 1rem 0',
-            color: '#f1f5f9',
-          }}
-        >
-          Input KV Store Entry
-        </h2>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: operation === 'SET' ? '1fr 1fr 1fr auto' : '1fr 1fr auto',
-            gap: '1rem',
-            alignItems: 'flex-end',
-          }}
-        >
-          {/* KEY INPUT */}
-          <div>
-            <label style={{ fontSize: '0.9rem', color: '#cbd5e1', display: 'block', marginBottom: '0.5rem' }}>
-              Key
-            </label>
-            <input
-              type="text"
-              value={inputKey}
-              onChange={(e) => setInputKey(e.target.value)}
-              placeholder="Enter key..."
-              disabled={isSubmitting || connectionStatus !== 'connected'}
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                borderRadius: '6px',
-                border: '1px solid rgba(71, 85, 105, 0.5)',
-                background: 'rgba(15, 23, 42, 0.6)',
-                color: '#f1f5f9',
-                fontFamily: 'inherit',
-                fontSize: '0.95rem',
-                opacity: isSubmitting || connectionStatus !== 'connected' ? 0.6 : 1,
-              }}
-            />
-          </div>
-
-          {/* FIELD INPUT */}
-          <div>
-            <label style={{ fontSize: '0.9rem', color: '#cbd5e1', display: 'block', marginBottom: '0.5rem' }}>
-              Field
-            </label>
-            <input
-              type="text"
-              value={inputField}
-              onChange={(e) => setInputField(e.target.value)}
-              placeholder="Enter field..."
-              disabled={isSubmitting || connectionStatus !== 'connected'}
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                borderRadius: '6px',
-                border: '1px solid rgba(71, 85, 105, 0.5)',
-                background: 'rgba(15, 23, 42, 0.6)',
-                color: '#f1f5f9',
-                fontFamily: 'inherit',
-                fontSize: '0.95rem',
-                opacity: isSubmitting || connectionStatus !== 'connected' ? 0.6 : 1,
-              }}
-            />
-          </div>
-
-          {/* VALUE INPUT - ONLY SHOW FOR SET */}
-          {operation === 'SET' && (
-            <div>
-              <label style={{ fontSize: '0.9rem', color: '#cbd5e1', display: 'block', marginBottom: '0.5rem' }}>
-                Value
-              </label>
-              <input
-                type="text"
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                placeholder="Enter value..."
-                disabled={isSubmitting || connectionStatus !== 'connected'}
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  borderRadius: '6px',
-                  border: '1px solid rgba(71, 85, 105, 0.5)',
-                  background: 'rgba(15, 23, 42, 0.6)',
-                  color: '#f1f5f9',
-                  fontFamily: 'inherit',
-                  fontSize: '0.95rem',
-                  opacity: isSubmitting || connectionStatus !== 'connected' ? 0.6 : 1,
-                }}
-              />
-            </div>
-          )}
-
-          {/* SINGLE DROPDOWN BUTTON */}
-          <div style={{ position: 'relative' }}>
-            <button
-              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-              disabled={isSubmitting || connectionStatus !== 'connected'}
-              style={{
-                background: isSubmitting
-                  ? 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)'
-                  : 'linear-gradient(135deg, #a855f7 0%, #ec4899 100%)',
-                color: 'white',
-                fontWeight: '700',
-                padding: '0.75rem 1.5rem',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: isSubmitting || connectionStatus !== 'connected' ? 'not-allowed' : 'pointer',
-                fontSize: '14px',
-                opacity: isSubmitting || connectionStatus !== 'connected' ? 0.6 : 1,
-                transition: 'all 0.3s ease',
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px',
-                width: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: '8px',
-              }}
-            >
-              {isSubmitting ? 'Processing...' : operation}
-              <span style={{ fontSize: '12px' }}>▼</span>
-            </button>
-
-            {/* DROPDOWN MENU */}
-            {isDropdownOpen && !isSubmitting && connectionStatus === 'connected' && (
-              <div
-                style={{
-                  position: 'absolute',
-                  bottom: '100%',
-                  left: 0,
-                  right: 0,
-                  background: 'rgba(30, 41, 59, 0.95)',
-                  border: '1px solid rgba(71, 85, 105, 0.4)',
-                  borderBottom: 'none',
-                  borderRadius: '8px 8px 0 0',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-                  zIndex: 9999,
-                  marginBottom: '2px',
-                }}
-              >
-                {['SET', 'GET', 'DELETE'].map((op) => (
-                  <button
-                    key={op}
-                    onClick={async () => {
-                      setOperation(op);
-                      setIsDropdownOpen(false);
-                      setGetResult(null);
-                      // Small delay to let state update before submission
-                      setTimeout(() => {
-                        // Trigger submit with the selected operation
-                        handleOperationSubmit(op);
-                      }, 50);
-                    }}
-                    style={{
-                      width: '100%',
-                      padding: '0.75rem 1.5rem',
-                      border: 'none',
-                      background: operation === op ? 'rgba(168, 85, 247, 0.2)' : 'transparent',
-                      color: '#f1f5f9',
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                      fontSize: '14px',
-                      fontWeight: '600',
-                      transition: 'background 0.2s',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.5px',
-                    }}
-                    onMouseEnter={(e) => {
-                      if (operation !== op) e.target.style.background = 'rgba(100, 100, 100, 0.2)';
-                    }}
-                    onMouseLeave={(e) => {
-                      if (operation !== op) e.target.style.background = 'transparent';
-                    }}
-                  >
-                    {op}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* RESULT DISPLAY - FULL WIDTH */}
-          {getResult && (
-            <div
-              style={{
-                gridColumn: '1 / -1',
-                marginTop: '15px',
-                padding: '12px',
-                background: '#f0fdf4',
-                border: '1px solid #86efac',
-                borderRadius: '8px',
-                color: '#166534',
-                fontSize: '14px',
-              }}
-            >
-              <strong>Result:</strong> {getResult.value || 'Not found'}
-            </div>
-          )}
-        </div>
-      </div>
 
       {/* Node Visualization + Logs */}
       <div
@@ -1156,7 +585,7 @@ const RaftVisualizationWithWebSocket = () => {
 
               {/* NEW: Vote requests (candidate asking for votes) */}
               {voteRequests.map((req) => (
-                <motion.line
+                <Motion.line
                   key={req.id}
                   x1={nodeCoords[req.from].x}
                   y1={nodeCoords[req.from].y}
@@ -1175,7 +604,7 @@ const RaftVisualizationWithWebSocket = () => {
               {activeMessage?.type === 'heartbeat' &&
                 leaderId &&
                 followers.map((f) => (
-                  <motion.line
+                  <Motion.line
                     key={`hb-${f}`}
                     x1={nodeCoords[leaderId].x}
                     y1={nodeCoords[leaderId].y}
@@ -1190,7 +619,7 @@ const RaftVisualizationWithWebSocket = () => {
                 ))}
 
               {activeMessage?.type === 'heartbeat' && leaderId && (
-                <motion.circle
+                <Motion.circle
                   cx={nodeCoords[leaderId].x}
                   cy={nodeCoords[leaderId].y}
                   r={60}
@@ -1207,7 +636,7 @@ const RaftVisualizationWithWebSocket = () => {
               {activeMessage?.type === 'vote_response' &&
                 nodeCoords[activeMessage.from] &&
                 nodeCoords[activeMessage.to] && (
-                  <motion.line
+                  <Motion.line
                     x1={nodeCoords[activeMessage.from].x}
                     y1={nodeCoords[activeMessage.from].y}
                     x2={nodeCoords[activeMessage.to].x}
@@ -1223,7 +652,7 @@ const RaftVisualizationWithWebSocket = () => {
 
               {/* NEW: Election won animation */}
               {showElectionAnimation && electionWinner && (
-                <motion.circle
+                <Motion.circle
                   cx={nodeCoords[electionWinner].x}
                   cy={nodeCoords[electionWinner].y}
                   r={50}
@@ -1249,7 +678,7 @@ const RaftVisualizationWithWebSocket = () => {
 
                 return (
                   <g key={`node-${nodeId}`}>
-                    <motion.circle
+                    <Motion.circle
                       cx={coords.x}
                       cy={coords.y}
                       r={50}
@@ -1403,7 +832,7 @@ const RaftVisualizationWithWebSocket = () => {
                   </div>
                 ) : nodeLogEntries[nodeId] ? (
                   nodeLogEntries[nodeId].map((log, idx) => (
-                    <motion.div
+                    <Motion.div
                       key={`${nodeId}-log-${log.id}-${idx}`}
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
@@ -1440,7 +869,7 @@ const RaftVisualizationWithWebSocket = () => {
                           ✓
                         </span>
                       )}
-                    </motion.div>
+                    </Motion.div>
                   ))
                 ) : null}
               </div>
@@ -1449,8 +878,6 @@ const RaftVisualizationWithWebSocket = () => {
         </div>
       </div>
 
-      {/* Committed KV Store */}
-      {enhancedTableUI}
 
       {/* Legend */}
       <div
@@ -1563,4 +990,43 @@ const RaftVisualizationWithWebSocket = () => {
   );
 };
 
-export default RaftVisualizationWithWebSocket;
+function App() {
+  const [authenticated, setAuthenticated] = useState(false);
+  const [error, setError] = useState('');
+  const login = async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = new FormData(form);
+    try {
+      const response = await fetch('/auth/login', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { Authorization: `Basic ${btoa(`${values.get('username')}:${values.get('password')}`)}` },
+      });
+      if (!response.ok) throw new Error('Sign-in failed');
+      form.reset();
+      setError('');
+      setAuthenticated(true);
+    } catch {
+      setError('Sign-in failed. Check your credentials and connection.');
+    }
+  };
+  const logout = async () => {
+    await fetch('/auth/logout', { method: 'POST', credentials: 'same-origin' });
+    setAuthenticated(false);
+  };
+  if (!authenticated) return (
+    <main style={{ maxWidth: 360, margin: '10vh auto', padding: 24 }}>
+      <h1>Raft telemetry</h1>
+      <form onSubmit={login} style={{ display: 'grid', gap: 12 }}>
+        <label>Username <input name="username" autoComplete="username" required /></label>
+        <label>Password <input name="password" type="password" autoComplete="current-password" required /></label>
+        <button type="submit">Sign in</button>
+        <p role="alert">{error}</p>
+      </form>
+    </main>
+  );
+  return <><button onClick={logout}>Sign out</button>
+    <RaftVisualizationWithWebSocket onSessionEnd={() => setAuthenticated(false)} /></>;
+}
+
+export default App;

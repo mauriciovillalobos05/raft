@@ -5,7 +5,8 @@ import uvicorn
 from raft.raft_websocket_manager import WebSocketManager
 from websocket_server import app
 from raft.raft_server import Raft
-from raft.raft_rpc import RaftService, ThreadedServer
+from raft.raft_rpc import create_rpc_server
+from security.auth import get_auth
 from inmem.byte_data_db import ByteDataDB
 from inmem.state_machine_applier import StateMachineApplier
 
@@ -21,6 +22,9 @@ WEBSOCKET_PORT = 8765
 
 class RaftCluster:
     def __init__(self, config, ws_manager: WebSocketManager):
+        auth = get_auth()
+        for node_id in config:
+            auth.authenticator(str(node_id))
         self.config = config
         self.servers = {}
         self.nodes = {}
@@ -47,13 +51,10 @@ class RaftCluster:
         raft_node.ws_manager = self.ws_manager
         print(f"WS manager instance in RAFT: {id(self.ws_manager)}, [Node {node_id}] WebSocket manager assigned")
 
-        service = RaftService(raft_node, db)
         node_config = self.config[node_id]
 
-        server = ThreadedServer(
-            service,
-            hostname=node_config["host"],
-            port=node_config["port"],
+        server = create_rpc_server(
+            raft_node, db, node_config["host"], node_config["port"],
         )
 
         print(f"[Node {node_id}] RPC server listening on {node_config['host']}:{node_config['port']}")
@@ -121,17 +122,22 @@ class RaftCluster:
 
 
 def start_uvicorn():
-    config = uvicorn.Config(app=app, host=WEBSOCKET_HOST, port=WEBSOCKET_PORT, log_level="info")
+    config = uvicorn.Config(app=app, host=WEBSOCKET_HOST, port=WEBSOCKET_PORT, log_level="info", ws="websockets-sansio", proxy_headers=False, **get_auth().web_tls())
     server = uvicorn.Server(config)
     server.run()
 
 
 def main():
+    auth = get_auth()
+    auth.web_tls()
+    auth.server_context(auth.gateway_identity)
+    for node_id in CLUSTER_CONFIG:
+        auth.authenticator(str(node_id))
     print("\n" + "=" * 60)
     print("RAFT Cluster with WebSocket Server")
     print("=" * 60)
     print(f"WebSocket Port: {WEBSOCKET_PORT}")
-    print(f"React should connect to: ws://localhost:{WEBSOCKET_PORT}/ws")
+    print(f"React should connect to: wss://localhost:{WEBSOCKET_PORT}/ws")
 
     # Start FastAPI/uvicorn in a background thread
     ws_thread = threading.Thread(target=start_uvicorn, daemon=True)
@@ -161,7 +167,7 @@ def main():
             print("=" * 60)
             print(f"\nCluster is running with Node {leader_id} as leader.")
             print(f"WebSocket server is broadcasting on port {WEBSOCKET_PORT}")
-            print(f"\nConnect your React app to: ws://localhost:{WEBSOCKET_PORT}/ws")
+            print(f"\nConnect your React app to: wss://localhost:{WEBSOCKET_PORT}/ws")
             print("\nThe cluster will continue running. Press Ctrl+C to stop.\n")
         else:
             print("\n" + "=" * 60)

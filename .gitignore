@@ -5,3 +5,14 @@ raft-venv
 *.json
 *.jsonl
 test_load
+# Local credentials and build output
+*.key
+*.crt
+*.csr
+*.srl
+.auth/
+client/raft-visualization/dist/
+passwords.json
+auth.json
+ca.cnf
+extensions.cnf

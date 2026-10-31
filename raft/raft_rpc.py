@@ -1,174 +1,132 @@
+"""Authenticated, role-limited RPyC entry points. Wire messages are JSON strings."""
 import rpyc
 from rpyc.utils.server import ThreadedServer
 from raft.raft_server import Raft
+from raft.vote_arguments import VoteArguments
+from raft.health_check_arguments import HealthCheckArguments
 from inmem.byte_data_db import ByteDataDB
 from inmem.state_machine_applier import StateMachineApplier
+from inmem.kv_command import create_set_command, create_delete_command, serialize_command
+from security.auth import get_auth, Principal, RPC_CONFIG
+from security.wire import Vote, Heartbeat, Set, Read, Key, ScanPrefix, decode, encode
+
+NODE_METHODS = {"send_vote_request", "send_health_check_request"}
+CLIENT_METHODS = {"set_kv", "delete_kv", "read_kv", "scan_kv", "scan_kv_by_prefix", "get_leader"}
+
 
 class RaftService(rpyc.Service):
-    """
-    RPyC Service exposing RAFT node methods via RPC
-    Handles both:
-    - Internal RAFT communication (leader election, log replication)
-    - Client operations (read/write)
-    """
-    
-    def __init__(self, raft: Raft, db: ByteDataDB):
-        super().__init__()
-        # Will be set from run_server()
-        self._raft = raft
-        self._db = db
-    
-    # ==================== PHASE 1: LEADER ELECTION ====================
-    
-    def exposed_send_vote_request(self, vote_arguments):
-        """
-        RPC ENDPOINT: RequestVote RPC receiver (§5.1, §5.4)
-        Called by: Remote candidate nodes
-        
-        Args:
-            vote_arguments: VoteArguments object
-                - current_term: Candidate's term
-                - candidate_id: Who's running for leader
-                - last_log_index: Candidate's last log index
-                - last_log_term: Candidate's last log term
-        
-        Returns:
-            bool: True if vote granted, False if rejected
-        """
-        return self._raft.handle_request_vote(vote_arguments)
-    
-    # ==================== PHASE 2: LOG REPLICATION ====================
-    
-    def exposed_send_health_check_request(self, health_check_arguments):
-        """
-        RPC ENDPOINT: AppendEntries RPC receiver (§5.3)
-        Called by: Leader (or candidate) with log entries or heartbeat
-        
-        Args:
-            health_check_arguments: HealthCheckArguments object
-                - current_term: Leader's term
-                - leader_id: Who's the leader
-                - prev_log_index: Index of log entry before new ones
-                - prev_log_term: Term of prevLogIndex entry
-                - entries: Log entries to append (empty for heartbeat)
-                - leader_commit: Leader's commitIndex
-        
-        Returns:
-            dict: {"success": bool, "term": int}
-                - success=True: Entries accepted/appended
-                - success=False: Log mismatch (leader will retry)
-        """
-        return self._raft.handle_health_check_request(health_check_arguments)
-    
-    # ==================== CLIENT OPERATIONS ====================
-    
-    def exposed_append_log_entries(self, command):
-        """
-        RPC ENDPOINT: Client write request
-        Called by: Client application to write data
-        
-        Args:
-            command: String command to replicate (e.g., "SET x=100", "DELETE key")
-        
-        Returns:
-            dict: {
-                "success": bool,
-                "index": int (log index if leader),
-                "term": int (current term if leader),
-                "error": str (if not leader),
-                "message": str
-            }
-        """
-        return self._raft.append_log_entries(command)
-    
-    def exposed_read_log(self, index):
-        """
-        RPC ENDPOINT: Client read request
-        Called by: Client application to read data
-        
-        Args:
-            index: Log index to read
-        
-        Returns:
-            dict: {
-                "success": bool,
-                "entry": dict (log entry if found),
-                "committed": bool (if entry is committed),
-                "error": str (if index not found)
-            }
-        """
-        return self._raft.read_log(index)
+    def __init__(self, raft, db):
+        self._raft, self._db = raft, db
+        self._principal = None
 
-    # ==================== LEADER DISCOVERY ====================
-    
+    def on_connect(self, conn):
+        principal = conn._config.get("credentials")
+        if not isinstance(principal, Principal) or principal.role not in {"node", "client"}:
+            raise PermissionError("Authenticated RPC identity required")
+        if principal.role == "node" and principal.identity not in {str(peer) for peer in self._raft.raft_terms.peers}:
+            raise PermissionError("Node is not a member of this peer group")
+        self._principal = principal
+
+    def _authorize(self, method):
+        allowed = NODE_METHODS if self._principal and self._principal.role == "node" else (
+            CLIENT_METHODS if self._principal and self._principal.role == "client" else set())
+        if method not in allowed:
+            raise PermissionError("RPC operation forbidden")
+
+    def _rpyc_getattr(self, name):
+        # Includes magic attributes and inherited service methods: deny by default.
+        method = name.removeprefix("exposed_")
+        self._authorize(method)
+        return getattr(self, "exposed_" + method)
+
+    def exposed_send_vote_request(self, payload):
+        self._authorize("send_vote_request")
+        vote = decode(payload, Vote)
+        if vote.candidate_id != self._principal.identity:
+            raise PermissionError("Candidate identity does not match certificate")
+        return self._raft.handle_request_vote(VoteArguments(**vote.model_dump()))
+
+    def exposed_send_health_check_request(self, payload):
+        self._authorize("send_health_check_request")
+        heartbeat = decode(payload, Heartbeat)
+        if heartbeat.leader_id != self._principal.identity:
+            raise PermissionError("Leader identity does not match certificate")
+        result = self._raft.handle_health_check_request(HealthCheckArguments(**heartbeat.model_dump()))
+        return encode(result)
+
+    def exposed_set_kv(self, payload):
+        self._authorize("set_kv")
+        args = decode(payload, Set)
+        command = create_set_command(**args.model_dump())
+        return encode(self._raft.append_log_entries(serialize_command(command)))
+
+    def exposed_delete_kv(self, payload):
+        self._authorize("delete_kv")
+        args = decode(payload, Read)
+        command = create_delete_command(**args.model_dump())
+        return encode(self._raft.append_log_entries(serialize_command(command)))
+
     def exposed_get_leader(self):
-        """Get current leader info for client routing."""
-        return self._raft.get_leader_info()
-    
-    # ==================== KV STORE READS (DIRECT FROM STATE MACHINE) ====================
-    
-    def exposed_read_kv(self, key: str, field: str, timestamp: int):
-        """Read from committed state machine."""
-        value = self._db.get_at(key, field, timestamp)
-        if value is not None:
-            return {"success": True, "value": value}
-        return {"success": False, "value": "NOT_FOUND"}
-    
-    def exposed_scan_kv(self, key: str, timestamp: int):
-        """Scan all fields for a key."""
-        record = self._db.get_record(key)
-        if not record:
-            return {"success": True, "fields": []}
-        return {"success": True, "fields": record.scan_fields(timestamp)}
-    
-    def exposed_scan_kv_by_prefix(self, key: str, prefix: str, timestamp: int):
-        """Scan fields by prefix."""
-        record = self._db.get_record(key)
-        if not record:
-            return {"success": True, "fields": []}
-        return {"success": True, "fields": record.scan_fields_by_prefix(prefix, timestamp)}
+        self._authorize("get_leader")
+        return encode(self._raft.get_leader_info())
+
+    def exposed_read_kv(self, payload):
+        self._authorize("read_kv")
+        args = decode(payload, Read)
+        value = self._db.get_at(args.key, args.field, args.timestamp)
+        return encode({"success": value is not None, "value": value if value is not None else "NOT_FOUND"})
+
+    def exposed_scan_kv(self, payload):
+        self._authorize("scan_kv")
+        args = decode(payload, Key)
+        record = self._db.get_record(args.key)
+        return encode({"success": True, "fields": record.scan_fields(args.timestamp) if record else []})
+
+    def exposed_scan_kv_by_prefix(self, payload):
+        self._authorize("scan_kv_by_prefix")
+        args = decode(payload, ScanPrefix)
+        record = self._db.get_record(args.key)
+        return encode({"success": True, "fields": record.scan_fields_by_prefix(args.prefix, args.timestamp) if record else []})
 
 
-def run_server(host="127.0.0.1", port=5001, node_id=0, peers_config=None):
-    
-    # Create shared ByteDataDB instance for this node
+class AuthenticatedThreadedServer(ThreadedServer):
+    def _serve_client(self, sock, credentials):
+        try:
+            return super()._serve_client(sock, credentials)
+        except (OSError, EOFError):
+            # Peers may disconnect immediately after a failed identity check.
+            return
+        finally:
+            sock.close()
+
+
+def create_rpc_server(raft, db, host, port):
+    # RPyC instantiates this class for EVERY connection; only Raft/DB are shared.
+    class ConnectionService(RaftService):
+        def __init__(self):
+            super().__init__(raft, db)
+
+    return AuthenticatedThreadedServer(
+        ConnectionService, hostname=host, port=port,
+        authenticator=get_auth().authenticator(str(raft.raft_terms.id)),
+        protocol_config=RPC_CONFIG.copy(),
+    )
+
+
+def run_server(host="127.0.0.1", port=5001, node_id="A", peers_config=None):
+    get_auth().authenticator(str(node_id))  # Validate before creating state/threads.
     db = ByteDataDB.get_instance()
-    
-    # Create state machine applier
-    applier = StateMachineApplier(db)
-    
-    # Create RAFT node with the applier
-    raft_node = Raft(
-        node_id=node_id,
-        peers_config=peers_config if peers_config else {},
-        logs_file_path=f"raft_node_{node_id}.log",
-        state_machine_applier=applier  # <-- Pass applier to RAFT
-    )
-    
-    # Create RPC service with both RAFT and DB
-    service = RaftService(raft_node, db)
-    
-    # Start RAFT threads
+    raft_node = Raft(node_id=node_id, peers_config=peers_config or {},
+                     logs_file_path=f"raft_node_{node_id}.log",
+                     state_machine_applier=StateMachineApplier(db))
+    server = create_rpc_server(raft_node, db, host, port)
     raft_node.start_raft_node()
-    raft_node.heartbeat_thread.start()
-    
-    # Start RPC server
-    server = ThreadedServer(
-        service,
-        hostname=host,
-        port=port,
-        protocol_config={"allow_public_attrs": True}
-    )
-    
-    print(f"[Node {node_id}] Server on {host}:{port}")
-    
     try:
         server.start()
-    except KeyboardInterrupt:
-        print(f"\n[Node {node_id}] Shutting down...")
+    finally:
         raft_node.kill()
         server.close()
 
 
 if __name__ == "__main__":
-    run_server(host="127.0.0.1", port=5001, node_id=0)
+    run_server()

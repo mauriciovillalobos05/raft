@@ -1,5 +1,7 @@
-import rpyc
-from rpyc.utils.server import ThreadedServer
+from dataclasses import asdict
+import json
+from security.auth import get_auth
+from security.wire import encode
 from raft.IRaftActions import IRaftActions
 from raft.raft_structure import RaftStructure
 from raft.raft_state import RaftState
@@ -9,7 +11,6 @@ import asyncio
 import concurrent.futures
 import traceback
 import datetime
-import json
 import threading
 import time
 from raft.vote_arguments import VoteArguments
@@ -901,13 +902,12 @@ class Raft(IRaftActions):
                     "leader_commit": health_check_args.leader_commit,
                 })
             
-            conn = rpyc.connect(
-                peer_value["host"],
-                peer_value["port"],
-                config={"allow_public_attrs": True, "instantiate_remote_objects": True}
+            conn = get_auth().connect(
+                peer_value["host"], peer_value["port"],
+                identity=str(self.raft_terms.id), expected_node=str(peer_id),
             )
 
-            result = conn.root.exposed_send_health_check_request(health_check_args)
+            result = json.loads(conn.root.send_health_check_request(encode(asdict(health_check_args))))
             
             # after getting `result`:
             try:
@@ -1078,12 +1078,11 @@ class Raft(IRaftActions):
         try:
             print(f"[Node {self.raft_terms.id}] Sending RequestVote to Node {peer_id}")
             
-            conn = rpyc.connect(
-                peer_value["host"],
-                peer_value["port"],
-                config={"allow_public_attrs": True, "instantiate_remote_objects": True}
+            conn = get_auth().connect(
+                peer_value["host"], peer_value["port"],
+                identity=str(self.raft_terms.id), expected_node=str(peer_id),
             )
-            result = conn.root.exposed_send_vote_request(vote_arguments)
+            result = conn.root.send_vote_request(encode(asdict(vote_arguments)))
             
             print(f"[Node {self.raft_terms.id}] RPC to Node {peer_id}: {result}")
             

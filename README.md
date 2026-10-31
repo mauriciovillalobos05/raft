@@ -63,9 +63,13 @@
 
 ## 🚀 Quick Start
 
+Authentication is required. Follow [the authentication setup and code map](AUTHENTICATION.md)
+for certificate generation, HTTPS UI login, permissions, and tests. Existing
+unauthenticated RPC clients must be updated.
+
 ### **Prerequisites**
 ```bash
-Python 3.8+
+Python 3.10+
 python3 -m venv raft-venv
 source raft-venv/bin/activate
 pip install -r requirements.txt
@@ -73,6 +77,8 @@ pip install -r requirements.txt
 
 ### **Start 3-Node Cluster**
 ```bash
+# First generate credentials and build the UI as described in AUTHENTICATION.md.
+export RAFT_AUTH_CONFIG=/private/tmp/raft-dev-auth/auth.json
 python3 start_cluster.py
 ```
 

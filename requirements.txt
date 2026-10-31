@@ -1,4 +1,6 @@
-rpyc
-fastapi
-uvicorn
+rpyc>=6,<7
+fastapi>=0.115,<1
+uvicorn>=0.35,<1
+pydantic>=2.8,<3
+websockets>=14,<18
 python-multipart
