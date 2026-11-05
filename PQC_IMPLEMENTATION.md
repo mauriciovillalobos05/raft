@@ -241,6 +241,29 @@ benchmark setting, not a production timer or consensus change. Three nodes and
 the load generator run on the same host in one process, so CPU is whole-process
 CPU, and measurements are local comparisons rather than deployment predictions.
 
+## Focused connection, quorum and network experiments
+
+The additional scenario harness is `benchmarks/scenarios.py`. Its measurements,
+raw samples, controlled election outcomes and deployment implications are in
+[the scenario report](benchmarks/scenario-results/REPORT.md).
+
+```bash
+raft-venv/bin/python -m benchmarks.scenarios --trials 3 --samples 60
+```
+
+The three experiment families compare pooled/fresh/burst connections using
+committed KV transactions, hybrid-capable majorities before and after leader
+failure, and a TLS-transparent relay with delay and simulated recovery stalls.
+The relay models delayed delivery and loss recovery. Actual IP packet loss and
+TCP congestion behavior require separate network experiments.
+
+Strict transport policy controls whether a vote request reaches a peer. Raft
+then applies its existing voting rules and majority over full membership.
+The mixed-capability experiment invokes elections explicitly, so its attempt
+durations exclude randomized failure detection. Classical comparison workers
+can communicate with each other; the one-hybrid-node case measures whether the
+strict candidate can obtain a majority.
+
 ## Rollout and remaining boundaries
 
 Upgrade runtimes and use the diagnostic on every participating process. Deploy

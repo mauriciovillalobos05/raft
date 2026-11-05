@@ -1,0 +1,1100 @@
+{
+  "case": "connections",
+  "profile": "classical",
+  "trial": 2,
+  "runtime": {
+    "python": "3.14.4 (main, Apr  7 2026, 13:13:20) [Clang 21.0.0 (clang-2100.0.123.102)]",
+    "openssl": "OpenSSL 3.6.3 9 Jun 2026",
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O"
+  },
+  "samples_per_mode": 60,
+  "rows": [
+    {
+      "completed": 60,
+      "elapsed_s": 2.3845617501065135,
+      "operations_s": 25.161856260304404,
+      "cpu_s": 1.598769,
+      "p50_ms": 38.8949376065284,
+      "p95_ms": 43.69881415041163,
+      "p99_ms": 60.72478919522835,
+      "latencies_ms": [
+        46.58408300019801,
+        39.77241716347635,
+        41.2134169600904,
+        39.89608399569988,
+        38.4439998306334,
+        40.87887494824827,
+        39.572083158418536,
+        37.667041178792715,
+        38.37099997326732,
+        39.45558285340667,
+        37.65795798972249,
+        38.21116709150374,
+        38.403083803132176,
+        38.06420788168907,
+        39.11083401180804,
+        37.85029100254178,
+        38.60904206521809,
+        43.54695789515972,
+        36.988249979913235,
+        58.44595795497298,
+        37.098333006724715,
+        40.476165944710374,
+        37.775916047394276,
+        36.52470814995468,
+        38.73650007881224,
+        40.701833087950945,
+        37.630457896739244,
+        39.39787484705448,
+        40.4899581335485,
+        39.67945906333625,
+        40.52054206840694,
+        38.144457852467895,
+        38.19954092614353,
+        35.56391689926386,
+        64.00408293120563,
+        41.142750065773726,
+        36.06841713190079,
+        38.71358302421868,
+        39.83045811764896,
+        36.484082927927375,
+        39.75287498906255,
+        37.874332861974835,
+        35.65045795403421,
+        38.513582898303866,
+        43.018999975174665,
+        37.1697919908911,
+        39.189707953482866,
+        38.13583287410438,
+        38.264499977231026,
+        40.652374969795346,
+        39.67275004833937,
+        36.040457896888256,
+        39.5410000346601,
+        40.622124914079905,
+        39.64083408936858,
+        39.42220797762275,
+        37.1183748356998,
+        40.455040987581015,
+        39.05337513424456,
+        38.153500063344836
+      ],
+      "errors": [],
+      "condition": "direct",
+      "mode": "pooled",
+      "initial_pool_handshake_excluded": true,
+      "new_connections": 0,
+      "handshake_samples": [
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 3.5431659780442715,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        }
+      ],
+      "simulated_recovery_stalls": 0,
+      "relay_chunks": 0
+    },
+    {
+      "completed": 60,
+      "elapsed_s": 2.3023182081524283,
+      "operations_s": 26.060689520476405,
+      "cpu_s": 1.8290389999999999,
+      "p50_ms": 37.97800000756979,
+      "p95_ms": 40.244517067912966,
+      "p99_ms": 43.407125989906476,
+      "latencies_ms": [
+        46.34537501260638,
+        37.97358297742903,
+        37.71837498061359,
+        37.456833058968186,
+        37.33358299359679,
+        39.105125004425645,
+        37.98241703771055,
+        35.79083294607699,
+        41.36529192328453,
+        36.70079191215336,
+        36.692250054329634,
+        36.50104207918048,
+        35.92258389107883,
+        38.20424992591143,
+        39.98829214833677,
+        38.90058305114508,
+        40.238792076706886,
+        34.595875069499016,
+        37.867457838729024,
+        39.68420787714422,
+        36.639041965827346,
+        36.25108301639557,
+        36.435750080272555,
+        40.086957858875394,
+        38.14275003969669,
+        37.3992919921875,
+        37.21204097382724,
+        36.0341661144048,
+        39.70574983395636,
+        39.76333304308355,
+        36.89233399927616,
+        38.96045801229775,
+        38.34862494841218,
+        36.37929214164615,
+        38.24945818632841,
+        39.26849993877113,
+        35.9115838073194,
+        40.35329190082848,
+        36.411416018381715,
+        39.64270791038871,
+        36.08225006610155,
+        38.081333972513676,
+        37.319625029340386,
+        36.02579212747514,
+        37.423500092700124,
+        40.006208000704646,
+        38.084750063717365,
+        39.36941712163389,
+        39.226958993822336,
+        38.19883312098682,
+        39.88441708497703,
+        36.57879098318517,
+        38.562291068956256,
+        38.305750116705894,
+        36.6972500924021,
+        39.55374984070659,
+        36.96958301588893,
+        35.34470801241696,
+        38.40141696855426,
+        37.959417095407844
+      ],
+      "errors": [],
+      "condition": "direct",
+      "mode": "fresh",
+      "initial_pool_handshake_excluded": false,
+      "new_connections": 60,
+      "handshake_samples": [
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.950417110696435,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.985249971970916,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.635875018313527,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6885000988841057,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6427910197526217,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.679416909813881,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.637583063915372,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6498332154005766,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6444171089679003,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.628916874527931,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.629459137097001,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6340410113334656,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.630749950185418,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6097081135958433,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6833340525627136,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6904998812824488,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6517079677432775,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.651041839271784,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.691333880648017,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.636916935443878,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6589168701320887,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6411248836666346,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.70558288320899,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.681500045582652,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6850830763578415,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6094999630004168,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6962500996887684,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6395830791443586,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6943751145154238,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6175000239163637,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.63541704043746,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6513750199228525,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.687125001102686,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.983582904562354,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.595999976620078,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.690875204280019,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6919590309262276,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6456250343471766,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.5999159552156925,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6249580550938845,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.638333011418581,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6957918889820576,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.67933402210474,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6137500535696745,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.663208171725273,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6197920087724924,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.629250055179,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6312500704079866,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.629500115290284,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6302081532776356,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.635000040754676,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.640750026330352,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.662000013515353,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.628374844789505,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6915420312434435,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6854590978473425,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6190830394625664,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.68137501552701,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.632749965414405,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.622750122100115,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        }
+      ],
+      "simulated_recovery_stalls": 0,
+      "relay_chunks": 0
+    },
+    {
+      "completed": 60,
+      "elapsed_s": 1.2439040839672089,
+      "operations_s": 48.23523033113676,
+      "cpu_s": 1.2655629999999998,
+      "p50_ms": 161.2309163901955,
+      "p95_ms": 166.53327053645626,
+      "p99_ms": 182.70957037108013,
+      "latencies_ms": [
+        50.03637494519353,
+        195.10320900008082,
+        113.34504187107086,
+        92.4198750872165,
+        71.93608419038355,
+        152.13241684250534,
+        174.09704183228314,
+        132.02783395536244,
+        165.38779204711318,
+        167.04983403906226,
+        166.08950006775558,
+        164.0026660170406,
+        166.50608298368752,
+        166.05250001884997,
+        162.09354205057025,
+        162.54604095593095,
+        162.1500828769058,
+        159.00633297860622,
+        160.13229195959866,
+        162.00141701847315,
+        160.89262487366796,
+        160.05808301270008,
+        161.02495789527893,
+        160.41174996644258,
+        161.56133310869336,
+        161.50991595350206,
+        162.51029213890433,
+        163.75333303585649,
+        161.43687488511205,
+        163.48545905202627,
+        162.2343328781426,
+        162.58291713893414,
+        162.11350006051362,
+        162.30570804327726,
+        162.18254202976823,
+        160.39270907640457,
+        162.497750017792,
+        161.7267089895904,
+        163.4698328562081,
+        164.51545804738998,
+        163.6529159732163,
+        162.43595792911947,
+        162.02399996109307,
+        160.93287500552833,
+        159.5112499780953,
+        159.06949993222952,
+        159.72412494011223,
+        157.9095411580056,
+        156.60445811226964,
+        157.22166607156396,
+        156.43329196609557,
+        156.81674983352423,
+        156.9224160630256,
+        158.4381670691073,
+        156.80412505753338,
+        158.4755841176957,
+        159.08591682091355,
+        159.76212499663234,
+        158.4229578729719,
+        159.1612920165062
+      ],
+      "errors": [],
+      "condition": "direct",
+      "mode": "burst",
+      "initial_pool_handshake_excluded": false,
+      "new_connections": 60,
+      "handshake_samples": [
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 6.249207770451903,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 8.414666168391705,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 8.290959056466818,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 7.61779211461544,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 7.880666060373187,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 8.031792007386684,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 6.722040940076113,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 8.933667093515396,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.717625116929412,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 3.085874952375889,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.9599580448120832,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6687090285122395,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.673584036529064,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.672166097909212,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.703458070755005,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.713375026360154,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.7206658851355314,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6859999634325504,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.7171659749001265,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6862078811973333,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.675957977771759,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.7146250940859318,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6418331544846296,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6911660097539425,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.7234170120209455,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.7095419354736805,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.685499843209982,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6820420753210783,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.652999944984913,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.64141708612442,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6742499321699142,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6464578695595264,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6819580234587193,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.729458035901189,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6609578635543585,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6460420340299606,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6223750319331884,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6387921534478664,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.595665864646435,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.7104169130325317,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.637875033542514,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6267501525580883,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.676792209967971,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.706625033169985,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6586668100208044,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6697919238358736,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.7287080883979797,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.685124985873699,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.997916890308261,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6630840729922056,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.641750033944845,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6685830671340227,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.66333413310349,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.716915914788842,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.629250055179,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6688750367611647,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.62608309276402,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.641292056068778,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.6811668649315834,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        },
+        {
+          "key_exchange_group": "X25519",
+          "tls_handshake_ms": 2.7054580859839916,
+          "tls_bytes_sent": 2303,
+          "tls_bytes_received": 2310,
+          "hello_retries": 0
+        }
+      ],
+      "simulated_recovery_stalls": 0,
+      "relay_chunks": 0
+    }
+  ]
+}

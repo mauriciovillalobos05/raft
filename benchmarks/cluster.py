@@ -72,7 +72,7 @@ class Cluster:
         def drive():
             while not self.stop.is_set():
                 for node in self.nodes.values():
-                    if node.raft_terms.state.name == "leader":
+                    if not node.killed() and node.raft_terms.state.name == "leader":
                         node.send_health_checks()
                 self.stop.wait(interval)
         self.pump = threading.Thread(target=drive, daemon=True)

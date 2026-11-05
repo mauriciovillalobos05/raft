@@ -1,0 +1,69 @@
+{
+  "case": "quorum",
+  "profile": "policy",
+  "trial": 3,
+  "runtime": {
+    "python": "3.14.4 (main, Apr  7 2026, 13:13:20) [Clang 21.0.0 (clang-2100.0.123.102)]",
+    "openssl": "OpenSSL 3.6.3 9 Jun 2026",
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O"
+  },
+  "samples_per_mode": 60,
+  "rows": [
+    {
+      "hybrid_nodes": 3,
+      "membership": 3,
+      "majority": 2,
+      "initial_leader": true,
+      "initial_commit": true,
+      "votes": {
+        "A": true,
+        "C": true,
+        "B": true
+      },
+      "election_attempt_ms": 16.929958015680313,
+      "leader_failure_recovered_and_committed": true,
+      "recovery_attempt_ms": 228.6937499884516,
+      "required_class_rejections": 0,
+      "rejection_peers": [],
+      "passed": true
+    },
+    {
+      "hybrid_nodes": 2,
+      "membership": 3,
+      "majority": 2,
+      "initial_leader": true,
+      "initial_commit": true,
+      "votes": {
+        "A": true,
+        "B": true
+      },
+      "election_attempt_ms": 22.264208178967237,
+      "leader_failure_recovered_and_committed": false,
+      "recovery_attempt_ms": 7.481375010684133,
+      "required_class_rejections": 6,
+      "rejection_peers": [
+        "C"
+      ],
+      "passed": true
+    },
+    {
+      "hybrid_nodes": 1,
+      "membership": 3,
+      "majority": 2,
+      "initial_leader": false,
+      "initial_commit": false,
+      "votes": {
+        "A": true
+      },
+      "election_attempt_ms": 6.805166834965348,
+      "leader_failure_recovered_and_committed": false,
+      "recovery_attempt_ms": null,
+      "required_class_rejections": 2,
+      "rejection_peers": [
+        "B",
+        "C"
+      ],
+      "passed": true
+    }
+  ]
+}
