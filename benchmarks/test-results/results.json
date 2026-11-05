@@ -1,0 +1,56 @@
+[
+  {
+    "profile": "policy",
+    "suite": "security_tests",
+    "passed": true,
+    "log": "benchmarks/test-results/policy-security_tests.txt",
+    "tests_run": 26,
+    "seconds": 3.359,
+    "skipped": 0
+  },
+  {
+    "profile": "policy",
+    "suite": "pqc_tests",
+    "passed": true,
+    "log": "benchmarks/test-results/policy-pqc_tests.txt",
+    "tests_run": 24,
+    "seconds": 19.386,
+    "skipped": 0
+  },
+  {
+    "profile": "hybrid-preferred",
+    "suite": "security_tests",
+    "passed": true,
+    "log": "benchmarks/test-results/hybrid-preferred-security_tests.txt",
+    "tests_run": 26,
+    "seconds": 3.305,
+    "skipped": 0
+  },
+  {
+    "profile": "hybrid-preferred",
+    "suite": "pqc_tests",
+    "passed": true,
+    "log": "benchmarks/test-results/hybrid-preferred-pqc_tests.txt",
+    "tests_run": 24,
+    "seconds": 1.187,
+    "skipped": 3
+  },
+  {
+    "profile": "classical",
+    "suite": "security_tests",
+    "passed": true,
+    "log": "benchmarks/test-results/classical-security_tests.txt",
+    "tests_run": 26,
+    "seconds": 3.29,
+    "skipped": 0
+  },
+  {
+    "profile": "classical",
+    "suite": "pqc_tests",
+    "passed": true,
+    "log": "benchmarks/test-results/classical-pqc_tests.txt",
+    "tests_run": 24,
+    "seconds": 1.25,
+    "skipped": 5
+  }
+]

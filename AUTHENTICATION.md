@@ -64,7 +64,8 @@ KV permission and no implicit log-reading permission. RPyC protocol housekeeping
 
 ## Local setup and startup
 
-Use Python 3.10+ and OpenSSL. From the repository root:
+On the PQC branch use CPython 3.14 linked to OpenSSL 3.6. See
+[PQC_IMPLEMENTATION.md](PQC_IMPLEMENTATION.md) for transport profiles and claims. From the repository root:
 
 ```bash
 source raft-venv/bin/activate
@@ -137,7 +138,7 @@ Session storage is process-local; use one gateway worker with this implementatio
 ## Verification
 
 ```bash
-python -m unittest discover -s security_tests -v
+python -m security.launcher -m unittest discover -s security_tests -v
 npm --prefix client/raft-visualization run lint
 npm --prefix client/raft-visualization run build
 ```

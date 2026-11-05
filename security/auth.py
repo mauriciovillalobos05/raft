@@ -11,9 +11,12 @@ from pathlib import Path
 import secrets
 import socket
 import ssl
+import time
 from dataclasses import dataclass
 from functools import lru_cache
 
+from security.transport import (ensure_runtime, get_policy, configure_context, observe_socket,
+                                enforce, agree, probe_capability, TransportError)
 from rpyc.core.stream import SocketStream
 from rpyc.utils.factory import connect_stream
 from rpyc.utils.authenticators import AuthenticationError
@@ -34,6 +37,8 @@ class Principal:
 
 class AuthConfig:
     def __init__(self, path):
+        ensure_runtime()
+        self.capability = None
         path = Path(path).resolve()
         self.data = json.loads(path.read_text())
         self.directory = path.parent
@@ -71,15 +76,20 @@ class AuthConfig:
     def path(self, name):
         return str((self.directory / name).resolve())
 
+    def check_capability(self, identity):
+        if self.capability is None:
+            self.capability = probe_capability(self, identity)
+        return self.capability
+
     def server_context(self, identity):
+        self.check_capability(identity)
         entry = self.identities[identity]
         context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-        context.minimum_version = ssl.TLSVersion.TLSv1_2
         context.verify_mode = ssl.CERT_REQUIRED
         context.load_verify_locations(self.path(self.data["ca_cert"]))
         context.load_cert_chain(self.path(entry["cert"]), self.path(entry["key"]))
         self._check_local_certificate(identity)
-        return context
+        return configure_context(context, "node-peer")
 
     def _check_local_certificate(self, identity):
         entry = self.identities[identity]
@@ -94,7 +104,9 @@ class AuthConfig:
             raise AuthenticationError("Unregistered peer certificate")
         return principal
 
-    def authenticator(self, node_id):
+    def authenticator(self, node_id, listener="rpc"):
+        if listener not in get_policy().data["listeners"]:
+            raise TransportError("Unclassified listener")
         if self.identities[str(node_id)]["role"] != "node":
             raise ValueError("RPC listener must use a node identity")
         context = self.server_context(str(node_id))
@@ -105,6 +117,12 @@ class AuthConfig:
                 sock.settimeout(5)
                 wrapped = context.wrap_socket(sock, server_side=True)
                 principal = self.principal(wrapped.getpeercert(binary_form=True))
+                transport_class = get_policy().classify(principal, self.gateway_identity)
+                if transport_class not in get_policy().data["listeners"][listener]:
+                    raise TransportError("Class not allowed on listener")
+                record = observe_socket(wrapped, transport_class, "accepted", str(node_id), principal.identity)
+                enforce(record)
+                agree(wrapped, record, server=True)
                 wrapped.settimeout(None)
                 return wrapped, principal
             except (OSError, AuthenticationError) as exc:
@@ -112,19 +130,31 @@ class AuthConfig:
                 raise AuthenticationError("RPC authentication failed") from exc
         return authenticate
 
-    def connect(self, host, port, identity, expected_node):
+    def connect(self, host, port, identity, expected_node, transport_class=None):
+        principal = Principal(identity, self.identities[identity]["role"])
+        classified = get_policy().classify(principal, self.gateway_identity)
+        if transport_class is not None and transport_class != classified:
+            raise TransportError("Requested class does not match authenticated identity")
+        transport_class = classified
+        self.check_capability(identity)
         entry = self.identities[identity]
         self._check_local_certificate(identity)
         context = ssl.create_default_context(cafile=self.path(self.data["ca_cert"]))
-        context.minimum_version = ssl.TLSVersion.TLSv1_2
+        configure_context(context, transport_class)
         context.load_cert_chain(self.path(entry["cert"]), self.path(entry["key"]))
         sock = socket.create_connection((host, port), timeout=5)
         wrapped = None
         try:
+            handshake_started = time.perf_counter()
             wrapped = context.wrap_socket(sock, server_hostname=host)
+            handshake_ms = (time.perf_counter() - handshake_started) * 1000
             principal = self.principal(wrapped.getpeercert(binary_form=True))
             if principal != Principal(str(expected_node), "node"):
                 raise AuthenticationError("Unexpected RPC server identity")
+            record = observe_socket(wrapped, transport_class, "dialed", identity, str(expected_node))
+            record["tls_handshake_ms"] = handshake_ms
+            enforce(record)
+            agree(wrapped, record)
             return connect_stream(SocketStream(wrapped), config=RPC_CONFIG.copy())
         except BaseException:
             (wrapped or sock).close()
@@ -136,6 +166,15 @@ class AuthConfig:
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         context.load_cert_chain(cert, key)
         return {"ssl_certfile": cert, "ssl_keyfile": key}
+
+    def web_config(self, app, **kwargs):
+        import uvicorn
+        from security.browser import EvidenceHTTPProtocol
+        config = uvicorn.Config(app, http=EvidenceHTTPProtocol, ws="websockets-sansio", proxy_headers=False,
+                                **self.web_tls(), **kwargs)
+        config.load()
+        configure_context(config.ssl, "browser-https")
+        return config
 
 
 @lru_cache(maxsize=1)

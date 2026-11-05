@@ -21,6 +21,7 @@ from websockets.exceptions import InvalidStatus, ConnectionClosed
 from tools.bootstrap_auth import bootstrap
 from security.auth import get_auth, AuthConfig, Principal, verify_password
 from security.wire import encode
+from security.transport import EVIDENCE
 from inmem.byte_data_db import ByteDataDB
 from inmem.state_machine_applier import StateMachineApplier
 from inmem.kv_client import KVClient
@@ -67,7 +68,7 @@ class SecurityIntegrationTests(unittest.TestCase):
         cls.port = cls.listener.getsockname()[1]
         cls.origin = f"https://localhost:{cls.port}"
         cls.auth.origins = [cls.origin]
-        cls.web_server = uvicorn.Server(uvicorn.Config(web.app, log_level="error", ws="websockets-sansio", proxy_headers=False, **cls.auth.web_tls()))
+        cls.web_server = uvicorn.Server(cls.auth.web_config(web.app, log_level="error"))
         cls.web_thread = threading.Thread(target=cls.web_server.run, kwargs={"sockets": [cls.listener]}, daemon=True)
         cls.web_thread.start()
         deadline = time.monotonic() + 5
@@ -266,6 +267,10 @@ class SecurityIntegrationTests(unittest.TestCase):
                     self.assertEqual(status, 401 if user is None else (200 if user in allowed else 403))
         self.assertEqual(self.request("GET", "/health", "viewer", password="wrong")[0], 401)
         self.assertEqual(self.request("GET", "/health", "unknown", password="wrong")[0], 401)
+        browser = [r for r in EVIDENCE.records if r['class'] == 'browser-https']
+        self.assertTrue(browser)
+        self.assertTrue(all(r['tls_version'] == 'TLSv1.3' and r['key_exchange_group'] == 'X25519'
+                            and r['requirement'] == 'classical' for r in browser))
 
     def test_14_docs_disabled(self):
         for route in ("/docs", "/redoc", "/openapi.json"):

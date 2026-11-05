@@ -1,3 +1,7 @@
+if __name__ == "__main__":
+    from security.launcher import ensure_launched
+    ensure_launched("start_cluster")
+
 import threading
 import time
 import uvicorn
@@ -122,7 +126,7 @@ class RaftCluster:
 
 
 def start_uvicorn():
-    config = uvicorn.Config(app=app, host=WEBSOCKET_HOST, port=WEBSOCKET_PORT, log_level="info", ws="websockets-sansio", proxy_headers=False, **get_auth().web_tls())
+    config = get_auth().web_config(app, host=WEBSOCKET_HOST, port=WEBSOCKET_PORT, log_level="info")
     server = uvicorn.Server(config)
     server.run()
 

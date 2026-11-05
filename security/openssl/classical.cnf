@@ -1,0 +1,10 @@
+config_diagnostics = 1
+openssl_conf = raft_init
+[raft_init]
+ssl_conf = raft_ssl
+[raft_ssl]
+system_default = raft_defaults
+[raft_defaults]
+MinProtocol = TLSv1.3
+MaxProtocol = TLSv1.3
+Groups = X25519

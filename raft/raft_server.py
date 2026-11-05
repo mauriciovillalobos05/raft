@@ -904,7 +904,7 @@ class Raft(IRaftActions):
             
             conn = get_auth().connect(
                 peer_value["host"], peer_value["port"],
-                identity=str(self.raft_terms.id), expected_node=str(peer_id),
+                identity=str(self.raft_terms.id), expected_node=str(peer_id), transport_class="node-peer",
             )
 
             result = json.loads(conn.root.send_health_check_request(encode(asdict(health_check_args))))
@@ -1080,7 +1080,7 @@ class Raft(IRaftActions):
             
             conn = get_auth().connect(
                 peer_value["host"], peer_value["port"],
-                identity=str(self.raft_terms.id), expected_node=str(peer_id),
+                identity=str(self.raft_terms.id), expected_node=str(peer_id), transport_class="node-peer",
             )
             result = conn.root.send_vote_request(encode(asdict(vote_arguments)))
             

@@ -1,4 +1,8 @@
 """Authenticated, role-limited RPyC entry points. Wire messages are JSON strings."""
+if __name__ == "__main__":
+    from security.launcher import ensure_launched
+    ensure_launched("raft.raft_rpc")
+
 import rpyc
 from rpyc.utils.server import ThreadedServer
 from raft.raft_server import Raft

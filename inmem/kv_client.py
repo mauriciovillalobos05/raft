@@ -52,6 +52,7 @@ class KVClient:
             conn = get_auth().connect(
                 node_info['host'], node_info['port'],
                 identity=self.identity, expected_node=str(node_id),
+                transport_class="gateway-node" if self.identity == get_auth().gateway_identity else "client-node",
             )
             
             self._connections[node_id] = conn

@@ -1,5 +1,9 @@
 # RAFT-Based Distributed Key-Value Store with Real-Time Visualization
 
+This branch adds data-flow-based hybrid PQC transport. See
+[PQC_IMPLEMENTATION.md](PQC_IMPLEMENTATION.md) for the implementation, profiles,
+security boundaries, tests, and comparative measurements.
+
 > **A production-grade implementation of the RAFT consensus algorithm with comprehensive testing and real-time visualization**
 
 ---
@@ -69,7 +73,7 @@ unauthenticated RPC clients must be updated.
 
 ### **Prerequisites**
 ```bash
-Python 3.10+
+CPython 3.14 linked to OpenSSL 3.6
 python3 -m venv raft-venv
 source raft-venv/bin/activate
 pip install -r requirements.txt

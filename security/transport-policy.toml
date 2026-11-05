@@ -1,0 +1,11 @@
+# Classes are derived from authenticated identity, never caller-supplied labels.
+[classes]
+node-peer = "hybrid-required"
+gateway-node = "hybrid-required"
+client-node = "hybrid-required"
+log-access = "hybrid-required"
+browser-https = "classical"
+telemetry = "hybrid-preferred"
+
+[listeners]
+rpc = ["node-peer", "gateway-node", "client-node"]

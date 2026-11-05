@@ -9,6 +9,10 @@ Usage:
     Terminal 2: python test_raft_resilience_with_cluster.py
 """
 
+if __name__ == "__main__":
+    from security.launcher import ensure_launched
+    ensure_launched("start_cluster_test_inmem_raft_reslience")
+
 import time
 import sys
 import pathlib

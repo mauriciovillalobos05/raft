@@ -16,3 +16,10 @@ passwords.json
 auth.json
 ca.cnf
 extensions.cnf
+# Reproducible PQC results; credentials and transient smoke logs remain excluded.
+benchmarks/smoke/
+benchmarks/test-results/*.txt
+!benchmarks/test-results/results.json
+!benchmarks/results/classical-*.json
+!benchmarks/results/hybrid-preferred-*.json
+!benchmarks/results/policy-*.json

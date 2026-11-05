@@ -1,4 +1,8 @@
 """HTTPS KV gateway and authenticated, metadata-only operator telemetry."""
+if __name__ == "__main__":
+    from security.launcher import ensure_launched
+    ensure_launched("websocket_server")
+
 import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -10,6 +14,7 @@ import uvicorn
 from inmem.kv_client import KVClient
 from raft.raft_websocket_manager import WebSocketManager
 from security.auth import get_auth
+from security.transport import EVIDENCE
 from security.http import COOKIE, require, check_origin, create_session, session_principal, revoke_session
 
 CLUSTER_CONFIG = {
@@ -133,7 +138,8 @@ def health(principal=Depends(require("ui", "operator"))):
 
 @app.get("/cluster/status")
 def cluster_status(principal=Depends(require("ui", "operator"))):
-    return {"node_ids": list(CLUSTER_CONFIG), "node_count": len(CLUSTER_CONFIG)}
+    return {"node_ids": list(CLUSTER_CONFIG), "node_count": len(CLUSTER_CONFIG),
+            "transport": EVIDENCE.snapshot()}
 
 
 def get_ws_manager():
@@ -147,4 +153,4 @@ if ui_dist.is_dir():
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8765, ws="websockets-sansio", proxy_headers=False, **get_auth().web_tls())
+    uvicorn.Server(get_auth().web_config(app, host="0.0.0.0", port=8765)).run()
